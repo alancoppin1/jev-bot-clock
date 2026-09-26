@@ -6,8 +6,8 @@ export const CONFIG = {
     'CRV-GBP', 'XTZ-GBP', 'SNX-GBP', 'CHZ-GBP',
   ],
   starting_cash_gbp: 10000,
-  check_every_minutes: 15,
-  min_gap_minutes: 10,          // ignore wake-ups closer together than this
+  check_every_minutes: 10,
+  min_gap_minutes: 7,          // ignore wake-ups closer together than this
   candle_seconds: 3600,
   position_size_pct: 10,
   stop_loss_pct: 3,

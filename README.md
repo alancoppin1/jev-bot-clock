@@ -9,5 +9,5 @@ There are no keys or passwords here: the bot signs in to Vercel AI Gateway with 
 
 - **Run a round now:** Actions → "Wake the Jev bot" → Run workflow.
 - **Pause the bot:** Actions → "Wake the Jev bot" → ⋯ → Disable workflow.
-- The bot ignores calls less than 10 minutes apart, so late or doubled runs are harmless.
+- The bot ignores calls less than 7 minutes apart, so late or doubled runs are harmless.
 - Paper trading only. No real money.
