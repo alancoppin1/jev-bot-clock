@@ -66,7 +66,7 @@ export async function runCycle(st, cfg, rules, { token, deps = {} } = {}) {
 
   // 1. prices (parallel)
   const data = {};
-  await pool(markets, cfg.concurrency, async (m) => {
+  await pool(markets, cfg.market_concurrency, async (m) => {
     try {
       const [candles, price] = await Promise.all([fc(m, cfg.candle_seconds), fp(m)]);
       data[m] = { candles, price };
@@ -91,7 +91,7 @@ export async function runCycle(st, cfg, rules, { token, deps = {} } = {}) {
   const stopped = new Set(order.filter(hitsStop));
   const ask_list = order.filter(m => !stopped.has(m));
   const replies = {};
-  await pool(ask_list, cfg.concurrency, async (m) => {
+  await pool(ask_list, cfg.jev_concurrency, async (m) => {
     let ind;
     try { ind = indicators(data[m].candles, prices[m]); } catch (e) { event('WARN', `${m}: ${e.message}`); return; }
     const state = buildState(m, ind, cfg.candle_seconds, deps.now ? deps.now() : new Date());

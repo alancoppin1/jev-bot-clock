@@ -20,7 +20,8 @@ export const CONFIG = {
   major_markets: ['BTC-GBP', 'ETH-GBP'],
   jev_model: 'typesafe-ai/jev',
   jev_url: 'https://ai-gateway.vercel.sh/typesafe/v1/systemone',
-  concurrency: 5,
+  market_concurrency: 2,        // Coinbase public data - kept gentle to avoid rate limits
+  jev_concurrency: 2,           // Jev questions at once - kept gentle to avoid rate limits
 };
 
 export const RULES = {

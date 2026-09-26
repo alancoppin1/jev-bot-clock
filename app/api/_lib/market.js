@@ -5,11 +5,22 @@ const HEADERS = { 'User-Agent': 'jev-paper-trader/2.0 (cloud)' };
 
 export class NotListedError extends Error {}
 
-async function getJson(url) {
-  const r = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(15000) });
-  if (r.status === 400 || r.status === 404) throw new NotListedError(`HTTP ${r.status}`);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// Coinbase limits how fast public data can be requested, so busy replies (429/5xx) are retried after a pause.
+async function getJson(url, tries = 4) {
+  let last = '';
+  for (let i = 0; i < tries; i++) {
+    let r;
+    try { r = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(15000) }); }
+    catch (e) { last = e.message; await sleep(1000 * 2 ** i); continue; }
+    if (r.status === 400 || r.status === 404) throw new NotListedError(`HTTP ${r.status}`);
+    if (r.ok) return r.json();
+    last = `HTTP ${r.status}`;
+    if (r.status !== 429 && r.status < 500) break;
+    await sleep(1000 * 2 ** i + Math.random() * 500);
+  }
+  throw new Error(last);
 }
 
 export async function fetchCandles(product, granularity = 3600) {

@@ -11,7 +11,7 @@ export async function gatewayToken() {
   return getVercelOidcToken();
 }
 
-export async function askJev({ url, model, token, state, questions, retries = 3, timeoutMs = 20000 }) {
+export async function askJev({ url, model, token, state, questions, retries = 5, timeoutMs = 20000 }) {
   const body = JSON.stringify({ state, model, questions });
   let lastErr = '';
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -42,7 +42,7 @@ export async function askJev({ url, model, token, state, questions, retries = 3,
     if (!RETRY.has(r.status)) throw new JevError(`Jev returned HTTP ${r.status}: ${String(msg).slice(0, 200)}`);
     lastErr = `HTTP ${r.status}`;
     const ra = parseFloat(r.headers.get('retry-after') || '');
-    await sleep(Number.isFinite(ra) ? Math.min(ra * 1000, 15000) : Math.min(1000 * 2 ** attempt, 8000));
+    await sleep(Number.isFinite(ra) ? Math.min(ra * 1000, 15000) : Math.min(1500 * 2 ** attempt, 12000) + Math.random() * 500);
   }
   throw new JevError(`Jev unavailable after ${retries + 1} attempts (${lastErr})`);
 }
