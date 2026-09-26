@@ -21,6 +21,7 @@ export const CONFIG = {
   jev_model: 'typesafe-ai/jev',
   jev_url: 'https://ai-gateway.vercel.sh/typesafe/v1/systemone',
   market_concurrency: 2,        // Coinbase public data - kept gentle to avoid rate limits
+  jev_split: 2,                 // ask Jev about 1/2 of the coins each round, alternating (each coin every 30 min)
   jev_concurrency: 1,           // one Jev question at a time - Jev throttles parallel calls
   jev_gap_ms: 250,              // short pause between Jev questions
   round_budget_seconds: 200,    // stop asking Jev after this long so a round never overruns

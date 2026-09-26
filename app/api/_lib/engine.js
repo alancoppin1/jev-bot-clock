@@ -91,7 +91,11 @@ export async function runCycle(st, cfg, rules, { token, deps = {}, startedAt = D
   const order = markets.filter(m => prices[m] != null);
   const hitsStop = (m) => { const p = st.positions[m]; return !!p && (prices[m] <= p.stop_price || prices[m] >= p.target_price); };
   const stopped = new Set(order.filter(hitsStop));
-  const ask_list = order.filter(m => !stopped.has(m));
+  // Jev is asked about one group of coins per round, taking turns (stop-loss/take-profit still checks every coin every round)
+  const split = Math.max(1, cfg.jev_split || 1);
+  st.round = (st.round || 0) + 1;
+  const turn = st.round % split;
+  const ask_list = order.filter(m => !stopped.has(m) && cfg.markets.indexOf(m) % split === turn);
   const replies = {};
   const budgetMs = (cfg.round_budget_seconds || 200) * 1000;
   let outOfTime = 0;
@@ -246,7 +250,7 @@ export function snapshot(st, cfg, rules, credits = null) {
   return {
     schema: 1, generated_at: iso(), engine: 'jev', provider: 'vercel', runner: 'cloud',
     markets: cfg.markets.filter(m => !st.unavailable.includes(m)),
-    check_every_minutes: cfg.check_every_minutes, starting_cash: st.starting_cash, cash: st.cash, fees_paid: st.fees_paid,
+    check_every_minutes: cfg.check_every_minutes, jev_split: cfg.jev_split || 1, starting_cash: st.starting_cash, cash: st.cash, fees_paid: st.fees_paid,
     risk: { position_size_pct: cfg.position_size_pct, stop_loss_pct: cfg.stop_loss_pct, take_profit_pct: cfg.take_profit_pct,
       daily_loss_limit_pct: cfg.daily_loss_limit_pct, cooldown_minutes: cfg.cooldown_minutes, fee_pct: cfg.fee_pct,
       slippage_pct: cfg.slippage_pct, slippage_pct_other: cfg.slippage_pct_other, major_markets: cfg.major_markets },

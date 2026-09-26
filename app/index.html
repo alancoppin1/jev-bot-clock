@@ -507,7 +507,7 @@ footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-t
     const closed = s.closed || 0;
     const winRate = closed ? Math.round(s.wins / closed * 100) + '% won' : 'none closed yet';
     const cr = snap.credits;
-    $('#subtitle').textContent = `Fake money only · ${(snap.markets || []).length > 4 ? (snap.markets.length + ' coins') : (snap.markets || []).join(', ')} · checks every ${snap.check_every_minutes || 15} min · decisions by Jev via ${snap.provider === 'vercel' ? 'Vercel AI Gateway' : 'TypeSafe'}${snap.runner === 'cloud' ? ' · runs in the cloud' : ''}`;
+    $('#subtitle').textContent = `Fake money only · ${(snap.markets || []).length > 4 ? (snap.markets.length + ' coins') : (snap.markets || []).join(', ')} · checks every ${snap.check_every_minutes || 15} min${(snap.jev_split || 1) > 1 ? ` (each coin every ${(snap.check_every_minutes || 15) * snap.jev_split} min)` : ''} · decisions by Jev via ${snap.provider === 'vercel' ? 'Vercel AI Gateway' : 'TypeSafe'}${snap.runner === 'cloud' ? ' · runs in the cloud' : ''}`;
 
     const reads = (snap.markets || []).length > 4 ? '' : (snap.markets || []).map(mk => readCard(mk, (snap.latest || {})[mk], snap)).join('');
     const eqPts = snap.equity || [];
