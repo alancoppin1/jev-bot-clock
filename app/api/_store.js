@@ -1,4 +1,4 @@
-import { get, put } from '@vercel/blob';
+import { get, head, put } from '@vercel/blob';
 
 export class StoreNotConnected extends Error {}
 
@@ -11,15 +11,18 @@ function checkConfigured() {
 // Returns { data, etag } or { data: null, etag: null } when the blob doesn't exist.
 export async function readJsonTagged(pathname) {
   checkConfigured();
-  let r;
+  // The version tag comes from the storage API (head), in the same form put's ifMatch expects.
+  // Read it BEFORE the content: if the blob changes in between, the later ifMatch write fails safely.
+  let meta, r;
   try {
+    meta = await head(pathname);
     r = await get(pathname, { access: 'private', useCache: false });
   } catch (e) {
     if (e && e.name === 'BlobNotFoundError') return { data: null, etag: null };
     throw e;
   }
   if (!r || r.statusCode !== 200 || !r.stream) return { data: null, etag: null };
-  return { data: JSON.parse(await new Response(r.stream).text()), etag: r.blob?.etag ?? null };
+  return { data: JSON.parse(await new Response(r.stream).text()), etag: meta?.etag ?? null };
 }
 
 export async function readJson(pathname) {

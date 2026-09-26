@@ -42,7 +42,8 @@ export default async function handler(req, res) {
     try {
       claim = await writeJson('state.json', st, etag ? { ifMatch: etag } : { overwrite: false });
     } catch (e) {
-      return res.status(200).json({ ok: true, skipped: 'another round claimed this slot' });
+      console.error('claim failed', e);
+      return res.status(200).json({ ok: true, skipped: 'another round claimed this slot', detail: String(e.message || e).slice(0, 200) });
     }
 
     const token = await gatewayToken();
