@@ -258,7 +258,7 @@ export function snapshot(st, cfg, rules, credits = null) {
     equity: downsample(st.equity.map(r => [r.time, r.equity, r.benchmark_equity]), 1500),
     trades: st.trades.slice(-200),
     decisions: st.decisions.slice(-60),
-    events: st.events.filter(e => (e.level === 'WARN' || e.level === 'ERROR' || e.level === 'SKIP') && !(e.level === 'ERROR' && /Jev unavailable after/.test(e.message))).slice(-30),
+    events: st.events.filter(e => (e.level === 'WARN' || e.level === 'ERROR' || e.level === 'SKIP') && !(e.level === 'ERROR' && /Jev unavailable after/.test(e.message)) && Date.now() - Date.parse(e.time) < 86400000).slice(-30),   // last 24 hours only
     credits,
   };
 }
