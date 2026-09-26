@@ -47,7 +47,7 @@ export default async function handler(req, res) {
     }
 
     const token = await gatewayToken();
-    const result = await runCycle(st, CONFIG, RULES, { token });
+    const result = await runCycle(st, CONFIG, RULES, { token, startedAt: started });
     st.last_cycle_at = iso();
     st.running_until = null;
 

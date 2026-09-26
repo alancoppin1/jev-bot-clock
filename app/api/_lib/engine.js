@@ -57,7 +57,7 @@ async function pool(items, n, fn) {
 }
 
 // ------------------------------------------------------------------ one round
-export async function runCycle(st, cfg, rules, { token, deps = {} } = {}) {
+export async function runCycle(st, cfg, rules, { token, deps = {}, startedAt = Date.now() } = {}) {
   const fc = deps.fetchCandles || fetchCandles, fp = deps.fetchPrice || fetchPrice, ask = deps.askJev || askJev;
   const now = () => iso(deps.now ? deps.now() : new Date());
   const push = (k, row) => { st[k].push({ time: now(), ...row }); if (st[k].length > KEEP[k]) st[k].splice(0, st[k].length - KEEP[k]); };
@@ -91,13 +91,19 @@ export async function runCycle(st, cfg, rules, { token, deps = {} } = {}) {
   const stopped = new Set(order.filter(hitsStop));
   const ask_list = order.filter(m => !stopped.has(m));
   const replies = {};
+  const budgetMs = (cfg.round_budget_seconds || 200) * 1000;
+  let outOfTime = 0;
   await pool(ask_list, cfg.jev_concurrency, async (m) => {
+    if (!deps.askJev && Date.now() - startedAt > budgetMs) { outOfTime++; return; }
+    if (!deps.askJev && cfg.jev_gap_ms) await new Promise(r => setTimeout(r, cfg.jev_gap_ms));
     let ind;
     try { ind = indicators(data[m].candles, prices[m]); } catch (e) { event('WARN', `${m}: ${e.message}`); return; }
     const state = buildState(m, ind, cfg.candle_seconds, deps.now ? deps.now() : new Date());
     try { replies[m] = await ask({ url: cfg.jev_url, model: cfg.jev_model, token, state, questions: rules.questions }); }
     catch (e) { replies[m] = { error: e instanceof JevError ? e.message : `unexpected: ${e.message}` }; }
   });
+
+  if (outOfTime) event('WARN', `ran out of time - ${outOfTime} coin(s) not checked this round`);
 
   // 4. apply stops and rules coin by coin in a fixed order (cash is shared, so sequence matters)
   for (const m of order) {
