@@ -9,6 +9,7 @@ const r2 = (v) => Math.round(v * 100) / 100;
 export const VARIANTS = {
   B: { name: 'B · improved rules', short: 'B', desc: "Jev's buy signal, only while Bitcoin is above its 50-hour average; stop sized to each coin's normal movement (3–8%) that trails up behind the price; no fixed profit target." },
   C: { name: 'C · no Jev', short: 'C', desc: "Same rules and stops as A, but decided straight from the price indicators (moving averages, 6-hour change, RSI) with no Jev." },
+  D: { name: 'D · A + news', short: 'D', desc: "A's rules, plus Jev reads the latest crypto headlines and the Fear & Greed Index: no buying when the news mood is negative, a major bad event is reported, or a coin's own news is bad; sells a coin on bad news about it or a major bad event." },
 };
 
 export function newAccount(cash, now) {
@@ -50,7 +51,7 @@ export function indicatorAnswers(ind) {
 
 // One round for one variant account.
 //   turn: coins judged this round; jev: Jev replies by coin; ind: indicators by coin; btcUp: Bitcoin filter
-export function runVariant(id, a, { order, turn, prices, jev, ind, btcUp, cfg, rules, slipFor, now, event }) {
+export function runVariant(id, a, { order, turn, prices, jev, ind, btcUp, news, cfg, rules, slipFor, now, event }) {
   const today = now.slice(0, 10), eqNow = equityOf(a, prices);
   if (a.day !== today) { a.day = today; a.day_start_equity = eqNow; }
   const dayLoss = a.day_start_equity ? (1 - eqNow / a.day_start_equity) * 100 : 0;
@@ -80,7 +81,14 @@ export function runVariant(id, a, { order, turn, prices, jev, ind, btcUp, cfg, r
     else answers = jev[m] && !jev[m].error ? jev[m].answers : null;
     if (!answers) continue;
 
+    // D: news read by Jev (if there's no usable read this round, D simply follows A's rules)
+    const coinNews = id === 'D' && news ? news.coins[m] : null;
+    const badCoinNews = !!coinNews && coinNews.view === 'negative' && (coinNews.conf ?? 1) >= 0.6;
     if (a.positions[m]) {
+      if (id === 'D' && news && (badCoinNews || news.risk >= 0.7)) {
+        const why = badCoinNews ? 'bad news for this coin' : 'major bad news event';
+        const pnl = sell(a, m, price, cfg, slipFor(m), now, `news: ${why}`); event('TRADE', `[${id}] SELL ${m} (${why}) P&L £${pnl}`); continue;
+      }
       const [hit, why] = exitSignal(rules, answers);
       if (hit) { const pnl = sell(a, m, price, cfg, slipFor(m), now, `exit rule: ${why}`); event('TRADE', `[${id}] SELL ${m} (exit rule) P&L £${pnl}`); }
       continue;
@@ -88,6 +96,7 @@ export function runVariant(id, a, { order, turn, prices, jev, ind, btcUp, cfg, r
     const [ok] = entrySignal(rules, answers);
     if (!ok || blocked) continue;
     if (id === 'B' && !btcUp) continue;
+    if (id === 'D' && news && ((news.mood ?? 2) < 1.5 || news.risk >= 0.5 || badCoinNews)) continue;
     if (a.last_exit[m] && (Date.parse(now) - Date.parse(a.last_exit[m])) / 60000 < cfg.cooldown_minutes) continue;
     const spend = Math.min(a.cash, equityOf(a, prices) * cfg.position_size_pct / 100);
     if (spend < 10) continue;

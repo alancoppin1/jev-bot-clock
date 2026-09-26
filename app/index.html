@@ -24,6 +24,7 @@
   --series-2: #eb6834;
   --series-3: #1baf7a;
   --series-4: #eda100;
+  --series-5: #e87ba4;
   --seq-track: #cde2fb;
   --seq-fill: #2a78d6;
   --good: #0ca30c;
@@ -49,6 +50,7 @@
     --series-2: #d95926;
     --series-3: #199e70;
     --series-4: #c98500;
+    --series-5: #d55181;
     --seq-track: #184f95;
     --seq-fill: #5598e7;
     --good-text: #3fcb3f;
@@ -70,6 +72,7 @@
   --series-2: #d95926;
   --series-3: #199e70;
   --series-4: #c98500;
+  --series-5: #d55181;
   --seq-track: #184f95;
   --seq-fill: #5598e7;
   --good-text: #3fcb3f;
@@ -406,7 +409,7 @@ footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-t
   }
 
   // ---------- side-by-side rules test (A / B / C vs buy & hold, all rebased to the same start) ----------
-  const CMP = { A: '--series-1', B: '--series-3', C: '--series-4', H: '--series-2' };
+  const CMP = { A: '--series-1', B: '--series-3', C: '--series-4', D: '--series-5', H: '--series-2' };
   function drawCompare(box, cmp, start) {
     const rows = cmp.rows || [];
     if (rows.length < 2) { box.innerHTML = '<div class="empty">The comparison chart appears after the test’s second round.</div>'; return; }
@@ -458,7 +461,16 @@ footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-t
     hit.addEventListener('pointerleave', () => { hov.style.display = 'none'; tip.style.display = 'none'; });
   }
 
-  function compareSection(cmp) {
+  function newsBlock(n) {
+    if (!n) return '';
+    const v = n.view || {}, moods = ['Very negative', 'Negative', 'Neutral', 'Positive', 'Very positive'];
+    const mood = v.mood != null ? moods[Math.max(0, Math.min(4, Math.round(v.mood)))] : 'no read';
+    const coinViews = Object.entries(v.coins || {}).map(([m, c]) => `${m.replace('-GBP', '')} ${c.view}`).join(', ');
+    return `<div class="sub" style="margin-top:10px"><b style="color:var(--text-primary)">What D saw</b> at ${esc(fmtTime(n.time))}: Fear &amp; Greed ${n.fng ? esc(n.fng.value + ' (' + n.fng.label + ')') : 'unavailable'} · Jev’s read of the news: <b>${esc(mood)}</b> · major bad-event risk ${esc(Math.round((v.risk || 0) * 100) + '%')}${coinViews ? ' · coins in the news: ' + esc(coinViews) : ''}</div>
+      ${(n.headlines || []).length ? `<details><summary>Headlines Jev read (${n.headlines.length})</summary><ul class="rules">${n.headlines.map(h => `<li><span class="dim">${esc(fmtTime(h.time))} · ${esc(h.source)}</span> — ${esc(h.title)}</li>`).join('')}</ul></details>` : ''}`;
+  }
+
+  function compareSection(cmp, news) {
     if (!cmp) return '';
     const best = cmp.lines.filter(l => l.id !== 'H').reduce((a, b) => (b.ret > a.ret ? b : a));
     const legend = cmp.series.map(id => `<span class="key"><i class="swatch" style="background:var(${CMP[id]})"></i>${esc(id === 'H' ? 'Buy & hold' : id)}</span>`).join('');
@@ -472,7 +484,8 @@ footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-t
         <div class="legend">${legend}</div></div>
       <div class="body"><div class="chart-box" id="cmpchart"></div>
         <div class="scroll" style="margin-top:12px"><table><thead><tr><th>Rules</th><th>What they do</th><th class="num">Since test start</th><th class="num">Closed trades</th><th class="num">Won</th><th>Open now</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
-        <div class="sub" style="margin-top:8px">${days < 60 ? `Too early to pick a winner — give it 60 days and 30+ closed trades per line. Ahead right now: ${esc(best.name)}.` : `Ahead: ${esc(best.name)}.`} If C keeps pace with A, Jev isn’t adding much.</div>
+        <div class="sub" style="margin-top:8px">${days < 60 ? `Too early to pick a winner — give it 60 days and 30+ closed trades per line. Ahead right now: ${esc(best.name)}.` : `Ahead: ${esc(best.name)}.`} If C keeps pace with A, Jev isn’t adding much. If D beats A, the news is helping.</div>
+        ${newsBlock(news)}
       </div></section>`;
   }
 
@@ -606,7 +619,7 @@ footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-t
 
       ${s.verdict ? verdictBlock(s) : ''}
 
-      ${compareSection(snap.compare)}
+      ${compareSection(snap.compare, snap.news)}
 
       <section class="grid-2">
         <div class="card">

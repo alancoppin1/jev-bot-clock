@@ -4,6 +4,7 @@ import { fetchCandles, fetchPrice, indicators, buildState, NotListedError } from
 import { askJev, JevError } from './jev.js';
 import { entrySignal, exitSignal, summarise, describe } from './rules.js';
 import { VARIANTS, newAccount, runVariant, variantSummary } from './variants.js';
+import { fetchNews, coinsMentioned, buildNewsState, newsQuestions, newsView } from './news.js';
 
 export const iso = (d = new Date()) => d.toISOString().slice(0, 19) + 'Z';
 const r2 = (v) => Math.round(v * 100) / 100;
@@ -189,15 +190,45 @@ export async function runCycle(st, cfg, rules, { token, deps = {}, startedAt = D
   const ind = {};
   for (const m of order) { try { ind[m] = indicators(data[m].candles, prices[m]); } catch {} }
   const btcUp = ind['BTC-GBP'] ? ind['BTC-GBP'].price > ind['BTC-GBP'].sma50 : false;
+  // news read for variant D: one extra Jev question set per round (re-used while the headlines haven't changed)
+  let news = null;
+  if (cfg.variants !== false && cfg.news !== false) {
+    try {
+      const n = await (deps.fetchNews || fetchNews)({ now: deps.now ? deps.now().getTime() : Date.now() });
+      const key = JSON.stringify([n.fng?.value, n.headlines.map(h => h.title)]);
+      const prev = st.news;
+      if (prev && prev.key === key && prev.answers && Date.parse(now()) - Date.parse(prev.time) < 30 * 60000) {
+        news = newsView(prev.answers);
+      } else if (n.fng || n.headlines.length) {
+        const mentioned = coinsMentioned(n.headlines, order);
+        const rep = await ask({ url: cfg.jev_url, model: cfg.jev_model, token, state: buildNewsState(n, now()), questions: newsQuestions(mentioned), retries: 3 });
+        const u = rep.usage || {};
+        st.stats.news_checks = (st.stats.news_checks || 0) + 1;
+        st.stats.tokens += (u.input_tokens || 0) + (u.output_tokens || 0);
+        if (u.cost_usd != null) { st.stats.cost += u.cost_usd; st.stats.costed++; }
+        st.news = { time: now(), key, fng: n.fng, headlines: n.headlines.slice(0, 8), mentioned, answers: rep.answers, errors: n.errors };
+        news = newsView(rep.answers);
+      }
+      if (n.errors.length && !n.headlines.length) event('WARN', `news unavailable this round (${n.errors.join('; ')}) - D follows A's rules`);
+    } catch (e) {
+      event('WARN', `news read failed (${String(e.message || e).slice(0, 120)}) - D follows A's rules this round`);
+    }
+  }
+
   if (cfg.variants !== false) {
+    // (re)start the side-by-side test when it's new or a variant has been added, so every line starts together
+    if (st.variants && Object.keys(VARIANTS).some(id => !st.variants[id])) {
+      st.variants = null; st.compare = [];
+      event('INFO', 'side-by-side test restarted to add a new variant');
+    }
     if (!st.variants) {
       st.variants = Object.fromEntries(Object.keys(VARIANTS).map(id => [id, newAccount(st.starting_cash, now())]));
       st.compare_base = { time: now(), a: eq, hold: bench };
-      event('INFO', 'started side-by-side test: A (current rules) vs B (improved rules) vs C (no Jev)');
+      event('INFO', `started side-by-side test: A vs ${Object.keys(VARIANTS).join(' vs ')}`);
     }
     const vEq = {};
     for (const id of Object.keys(st.variants)) {
-      vEq[id] = runVariant(id, st.variants[id], { order, turn: new Set(turnList), prices, jev: replies, ind, btcUp, cfg, rules,
+      vEq[id] = runVariant(id, st.variants[id], { order, turn: new Set(turnList), prices, jev: replies, ind, btcUp, news, cfg, rules,
         slipFor: (m) => slipFor(cfg, m), now: now(), event });
     }
     const row = [now(), r2(eq), ...Object.keys(VARIANTS).map(id => r2(vEq[id])), r2(bench)];
@@ -296,6 +327,7 @@ export function snapshot(st, cfg, rules, credits = null) {
     positions, prices, latest,
     equity: downsample(withLive(st).map(r => [r.time, r.equity, r.benchmark_equity]), 1500),
     compare: compareBlock(st),
+    news: st.news ? { time: st.news.time, fng: st.news.fng, headlines: st.news.headlines, mentioned: st.news.mentioned, view: newsView(st.news.answers) } : null,
     trades: st.trades.slice(-200),
     decisions: st.decisions.slice(-60),
     events: st.events.filter(e => (e.level === 'WARN' || e.level === 'ERROR' || e.level === 'SKIP') && !(e.level === 'ERROR' && /Jev unavailable after/.test(e.message)) && Date.now() - Date.parse(e.time) < 86400000).slice(-30),   // last 24 hours only
