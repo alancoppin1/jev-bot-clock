@@ -3,11 +3,12 @@
 import { fetchCandles, fetchPrice, indicators, buildState, NotListedError } from './market.js';
 import { askJev, JevError } from './jev.js';
 import { entrySignal, exitSignal, summarise, describe } from './rules.js';
+import { VARIANTS, newAccount, runVariant, variantSummary } from './variants.js';
 
 export const iso = (d = new Date()) => d.toISOString().slice(0, 19) + 'Z';
 const r2 = (v) => Math.round(v * 100) / 100;
 const MIN_TRADES = 30, MIN_DAYS = 60;
-const KEEP = { decisions: 600, events: 300, trades: 5000, equity: 20000 };
+const KEEP = { decisions: 200, events: 300, trades: 5000, equity: 20000, compare: 5000 };
 
 export function newState(cfg) {
   return {
@@ -95,7 +96,8 @@ export async function runCycle(st, cfg, rules, { token, deps = {}, startedAt = D
   const split = Math.max(1, cfg.jev_split || 1);
   st.round = (st.round || 0) + 1;
   const turn = st.round % split;
-  const ask_list = order.filter(m => !stopped.has(m) && cfg.markets.indexOf(m) % split === turn);
+  const turnList = order.filter(m => cfg.markets.indexOf(m) % split === turn);
+  const ask_list = turnList;   // stopped coins are still asked, so variant B has Jev's view of them
   const replies = {};
   const budgetMs = (cfg.round_budget_seconds || 200) * 1000;
   let outOfTime = 0;
@@ -182,10 +184,40 @@ export async function runCycle(st, cfg, rules, { token, deps = {}, startedAt = D
     } else push('decisions', { ...row, action: 'NONE', reason: why });
   }
 
-  // 5. equity snapshot
-  const eq = equityOf(st, prices);
-  push('equity', { engine: 'jev', cash: r2(st.cash), positions_value: r2(eq - st.cash), equity: r2(eq),
-    benchmark_equity: r2(benchmarkEquity(st, prices, cfg.fee_pct)), open_positions: Object.keys(st.positions).join(' ') || '-' });
+  // 4b. rule variants B and C - separate paper accounts on the same prices and Jev answers
+  const eq = equityOf(st, prices), bench = benchmarkEquity(st, prices, cfg.fee_pct);
+  const ind = {};
+  for (const m of order) { try { ind[m] = indicators(data[m].candles, prices[m]); } catch {} }
+  const btcUp = ind['BTC-GBP'] ? ind['BTC-GBP'].price > ind['BTC-GBP'].sma50 : false;
+  if (cfg.variants !== false) {
+    if (!st.variants) {
+      st.variants = Object.fromEntries(Object.keys(VARIANTS).map(id => [id, newAccount(st.starting_cash, now())]));
+      st.compare_base = { time: now(), a: eq, hold: bench };
+      event('INFO', 'started side-by-side test: A (current rules) vs B (improved rules) vs C (no Jev)');
+    }
+    const vEq = {};
+    for (const id of Object.keys(st.variants)) {
+      vEq[id] = runVariant(id, st.variants[id], { order, turn: new Set(turnList), prices, jev: replies, ind, btcUp, cfg, rules,
+        slipFor: (m) => slipFor(cfg, m), now: now(), event });
+    }
+    const row = [now(), r2(eq), ...Object.keys(VARIANTS).map(id => r2(vEq[id])), r2(bench)];
+    st.compare_live = row;
+    if (!st.compare) st.compare = [];
+    const lastC = st.compare.at(-1);
+    if (!lastC || !cfg.equity_every_minutes || Date.parse(row[0]) - Date.parse(lastC[0]) >= cfg.equity_every_minutes * 60000 - 90000) {
+      st.compare.push(row); if (st.compare.length > KEEP.compare) st.compare.splice(0, st.compare.length - KEEP.compare);
+    }
+  }
+  st.last_prices = prices;
+
+  // 5. equity snapshot (the chart keeps one point per equity_every_minutes; the latest value is always kept live)
+  const eqRow = { time: now(), engine: 'jev', cash: r2(st.cash), positions_value: r2(eq - st.cash), equity: r2(eq),
+    benchmark_equity: r2(bench), open_positions: Object.keys(st.positions).join(' ') || '-' };
+  st.live = eqRow;
+  const lastE = st.equity.at(-1);
+  if (!lastE || !cfg.equity_every_minutes || Date.parse(eqRow.time) - Date.parse(lastE.time) >= cfg.equity_every_minutes * 60000 - 90000) {
+    st.equity.push(eqRow); if (st.equity.length > KEEP.equity) st.equity.splice(0, st.equity.length - KEEP.equity);
+  }
   return { markets: Object.keys(prices).length, asked: ask_list.length, equity: r2(eq), open: Object.keys(st.positions) };
 }
 
@@ -204,16 +236,19 @@ export function verdict(s) {
   return 'BEATING BUY-AND-HOLD ON PAPER. That is encouraging but not proof: check it held up across both rising and falling weeks, and remember real fills and fees can be worse than simulated.';
 }
 
+const withLive = (st) => (st.live && (!st.equity.length || st.live.time > st.equity.at(-1).time) ? [...st.equity, st.live] : st.equity);
+
 export function summary(st) {
-  if (!st.equity.length) return {};
-  const eq = st.equity.map(r => r.equity), bench = st.equity.map(r => r.benchmark_equity);
+  const rows = withLive(st);
+  if (!rows.length) return {};
+  const eq = rows.map(r => r.equity), bench = rows.map(r => r.benchmark_equity);
   const sells = st.trades.filter(t => t.side === 'SELL'), pnls = sells.map(t => +t.pnl);
   const wins = pnls.filter(p => p > 0), losses = pnls.filter(p => p <= 0);
-  const days = (Date.parse(st.equity.at(-1).time) - Date.parse(st.equity[0].time)) / 86400000;
+  const days = (Date.parse(rows.at(-1).time) - Date.parse(rows[0].time)) / 86400000;
   const by_reason = {};
   for (const t of sells) { const k = String(t.reason).split(':')[0]; const [n, p] = by_reason[k] || [0, 0]; by_reason[k] = [n + 1, p + +t.pnl]; }
   const s = {
-    from: st.equity[0].time, to: st.equity.at(-1).time, days, start: st.starting_cash,
+    from: rows[0].time, to: rows.at(-1).time, days, start: st.starting_cash,
     equity: eq.at(-1), ret: (eq.at(-1) / st.starting_cash - 1) * 100,
     bench: bench.at(-1), bench_ret: (bench.at(-1) / st.starting_cash - 1) * 100,
     dd: maxDrawdown(eq), bench_dd: maxDrawdown(bench),
@@ -259,10 +294,32 @@ export function snapshot(st, cfg, rules, credits = null) {
       questions: Object.fromEntries(Object.entries(rules.questions).map(([k, q]) => [k, { type: q.type, instructions: q.instructions, criteria: q.criteria ?? null }])) },
     summary: summary(st),
     positions, prices, latest,
-    equity: downsample(st.equity.map(r => [r.time, r.equity, r.benchmark_equity]), 1500),
+    equity: downsample(withLive(st).map(r => [r.time, r.equity, r.benchmark_equity]), 1500),
+    compare: compareBlock(st),
     trades: st.trades.slice(-200),
     decisions: st.decisions.slice(-60),
     events: st.events.filter(e => (e.level === 'WARN' || e.level === 'ERROR' || e.level === 'SKIP') && !(e.level === 'ERROR' && /Jev unavailable after/.test(e.message)) && Date.now() - Date.parse(e.time) < 86400000).slice(-30),   // last 24 hours only
     credits,
   };
+}
+
+// side-by-side test: every line rescaled to start at the same £10,000 on the day the test began
+function compareBlock(st) {
+  if (!st.variants || !st.compare_base) return null;
+  const base = st.compare_base, start = st.starting_cash, ids = Object.keys(VARIANTS);
+  const rows = [...(st.compare || [])];
+  if (st.compare_live && (!rows.length || st.compare_live[0] > rows.at(-1)[0])) rows.push(st.compare_live);
+  const scaled = rows.map(r => [r[0], r2(r[1] / base.a * start), ...ids.map((_, i) => r[2 + i]), r2(r.at(-1) / base.hold * start)]);
+  const last = scaled.at(-1);
+  const pct = (v) => (v / start - 1) * 100;
+  const aTrades = st.trades.filter(t => t.time >= base.time && t.side === 'SELL');
+  const lines = [
+    { id: 'A', name: 'A · current rules', desc: 'The rules the bot has used since the start, with Jev.', ret: last ? pct(last[1]) : 0,
+      closed: aTrades.length, wins: aTrades.filter(t => +t.pnl > 0).length, open: Object.keys(st.positions) },
+    ...ids.map((id, i) => { const vs = variantSummary(st.variants[id], st.last_prices);
+      return { id, name: VARIANTS[id].name, desc: VARIANTS[id].desc, ret: last ? pct(last[2 + i]) : 0, closed: vs.closed, wins: vs.wins, open: vs.open,
+        trades: st.variants[id].trades.slice(-30) }; }),
+    { id: 'H', name: 'Buy & hold', desc: 'All 20 coins, equal amounts, never traded.', ret: last ? pct(last.at(-1)) : 0 },
+  ];
+  return { started: base.time, series: ['A', ...ids, 'H'], rows: downsample(scaled, 1500), lines };
 }

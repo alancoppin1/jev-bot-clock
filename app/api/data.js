@@ -2,7 +2,8 @@
 import { readJson, StoreNotConnected } from './_store.js';
 
 export default async function handler(req, res) {
-  res.setHeader('Cache-Control', 'no-store');
+  // The bot updates every 10 minutes, so let Vercel's cache answer repeat visits (keeps storage reads low).
+  res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=240, stale-while-revalidate=120');
   try {
     const snap = await readJson('snapshot.json');
     return res.status(200).json(snap || { empty: true });

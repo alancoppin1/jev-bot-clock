@@ -61,8 +61,13 @@ export function indicators(candles, price) {
   const vol6 = candles.slice(-7, -1).reduce((a, c) => a + c.volume, 0) / 6;
   const vol72 = candles.slice(-73, -1).reduce((a, c) => a + c.volume, 0) / 72;
   const at = (k) => closes[closes.length - 1 - k];
+  // average true range over the last 14 finished hours, as % of price (how much it normally moves per hour)
+  const fin = candles.slice(-15, -1);
+  let trSum = 0;
+  for (let k = 1; k < fin.length; k++) { const c = fin[k], pc = fin[k - 1].close; trSum += Math.max(c.high - c.low, Math.abs(c.high - pc), Math.abs(c.low - pc)); }
+  const atr14_pct = fin.length > 1 ? trSum / (fin.length - 1) / price * 100 : 1;
   return {
-    price,
+    price, atr14_pct,
     chg_1: pctChange(price, at(1)),
     chg_6: pctChange(price, at(6)),
     chg_24: pctChange(price, at(24)),

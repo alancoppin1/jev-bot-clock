@@ -1,7 +1,7 @@
 // One trading round in the cloud. Called every 15 minutes by the GitHub scheduler
 // (plus a daily Vercel cron as a backstop). Safe to call any time: it runs at most
 // one round per 10 minutes, and two overlapping calls can't both trade.
-import { readJsonTagged, writeJson, StoreNotConnected } from './_store.js';
+import { readJsonTagged, writeJson, StoreNotConnected, acquireLock, releaseLock } from './_store.js';
 import { CONFIG, RULES } from './_lib/settings.js';
 import { runCycle, snapshot, newState, iso } from './_lib/engine.js';
 import { gatewayToken } from './_lib/jev.js';
@@ -38,13 +38,19 @@ export default async function handler(req, res) {
     }
 
     // claim the round (fails if another call claimed it first)
-    st.running_until = iso(new Date(now + 280 * 1000));
-    let claim;
-    try {
-      claim = await writeJson('state.json', st, etag ? { ifMatch: etag } : { overwrite: false });
-    } catch (e) {
-      console.error('claim failed', e);
-      return res.status(200).json({ ok: true, skipped: 'another round claimed this slot', detail: String(e.message || e).slice(0, 200) });
+    let claim, lock = await acquireLock('round', 290);
+    if (lock === false) return res.status(200).json({ ok: true, skipped: 'another round is in progress' });
+    if (lock && etag) {
+      claim = { etag };                         // Redis: a small lock key instead of re-saving the whole state
+    } else {
+      st.running_until = iso(new Date(now + 280 * 1000));
+      try {
+        claim = await writeJson('state.json', st, etag ? { ifMatch: etag } : { overwrite: false });
+      } catch (e) {
+        await releaseLock('round', lock);
+        console.error('claim failed', e);
+        return res.status(200).json({ ok: true, skipped: 'another round claimed this slot', detail: String(e.message || e).slice(0, 200) });
+      }
     }
 
     const round = async () => {
@@ -54,6 +60,7 @@ export default async function handler(req, res) {
       st.running_until = null;
       await writeJson('state.json', st, claim?.etag ? { ifMatch: claim.etag } : {});
       await writeJson('snapshot.json', snapshot(st, CONFIG, RULES, await credits(token)));
+      await releaseLock('round', lock);
       return result;
     };
 

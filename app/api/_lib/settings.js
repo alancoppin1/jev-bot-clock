@@ -24,7 +24,8 @@ export const CONFIG = {
   jev_split: 2,                 // ask Jev about 1/2 of the coins each round, alternating (each coin every 30 min)
   jev_concurrency: 1,           // one Jev question at a time - Jev throttles parallel calls
   jev_gap_ms: 250,              // short pause between Jev questions
-  round_budget_seconds: 200,    // stop asking Jev after this long so a round never overruns
+  round_budget_seconds: 200,
+  equity_every_minutes: 60,    // one chart point an hour keeps stored history small (latest value is always live)    // stop asking Jev after this long so a round never overruns
 };
 
 export const RULES = {

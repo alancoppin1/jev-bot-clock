@@ -79,4 +79,16 @@ export async function writeJson(pathname, data, { overwrite = true, ifMatch } = 
   return put(pathname, JSON.stringify(data), opts);
 }
 
+// A small lock so two wake-ups can't run a round at once (Redis only).
+export async function acquireLock(name, seconds) {
+  if (!hasRedis()) return null;
+  const token = String(Date.now()) + Math.random().toString(36).slice(2);
+  const ok = await redis(['SET', PREFIX + 'lock:' + name, token, 'NX', 'EX', String(seconds)]);
+  return ok === 'OK' ? token : false;
+}
+export async function releaseLock(name, token) {
+  if (!hasRedis() || !token) return;
+  await redis(['EVAL', "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end", '1', PREFIX + 'lock:' + name, token]).catch(() => {});
+}
+
 export const storeName = () => (hasRedis() ? 'redis' : hasBlob() ? 'blob' : 'none');

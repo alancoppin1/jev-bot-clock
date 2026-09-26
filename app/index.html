@@ -22,6 +22,8 @@
   --text-muted: #7a7974;
   --series-1: #2a78d6;
   --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
   --seq-track: #cde2fb;
   --seq-fill: #2a78d6;
   --good: #0ca30c;
@@ -45,6 +47,8 @@
     --text-muted: #8f8e86;
     --series-1: #3987e5;
     --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
     --seq-track: #184f95;
     --seq-fill: #5598e7;
     --good-text: #3fcb3f;
@@ -64,6 +68,8 @@
   --text-muted: #8f8e86;
   --series-1: #3987e5;
   --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
   --seq-track: #184f95;
   --seq-fill: #5598e7;
   --good-text: #3fcb3f;
@@ -399,6 +405,77 @@ footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-t
     hit.addEventListener('pointerleave', leave);
   }
 
+  // ---------- side-by-side rules test (A / B / C vs buy & hold, all rebased to the same start) ----------
+  const CMP = { A: '--series-1', B: '--series-3', C: '--series-4', H: '--series-2' };
+  function drawCompare(box, cmp, start) {
+    const rows = cmp.rows || [];
+    if (rows.length < 2) { box.innerHTML = '<div class="empty">The comparison chart appears after the test’s second round.</div>'; return; }
+    const css = getComputedStyle(document.documentElement), surf = css.getPropertyValue('--surface-1').trim();
+    const ids = cmp.series, col = Object.fromEntries(ids.map(id => [id, css.getPropertyValue(CMP[id] || '--text-muted').trim()]));
+    const label = Object.fromEntries(ids.map(id => [id, id === 'H' ? 'Hold' : id]));
+    const W = Math.max(320, box.clientWidth || 700), H = W < 520 ? 240 : 300;
+    const m = { l: 64, r: W < 520 ? 12 : 64, t: 12, b: 28 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const ts = rows.map(r => toDate(r[0]).getTime());
+    const vals = rows.flatMap(r => r.slice(1)).concat([start]);
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    const pad = Math.max((hi - lo) * 0.12, start * 0.002); lo -= pad; hi += pad;
+    const step = niceStep(hi - lo, 5); lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+    const t0 = ts[0], t1 = ts.at(-1) === t0 ? t0 + 1 : ts.at(-1);
+    const x = t => m.l + (t - t0) / (t1 - t0) * iw, y = v => m.t + (1 - (v - lo) / (hi - lo)) * ih;
+    let g = '';
+    for (let v = lo; v <= hi + step / 2; v += step) g += `<line class="gridline" x1="${m.l}" x2="${m.l + iw}" y1="${y(v)}" y2="${y(v)}"/><text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${esc(gbp0.format(v))}</text>`;
+    const nx = W < 520 ? 3 : 5, spanH = (t1 - t0) / 3.6e6;
+    for (let i = 0; i < nx; i++) {
+      const t = t0 + (t1 - t0) * i / (nx - 1);
+      const lab = new Intl.DateTimeFormat('en-GB', spanH > 24 * 8 ? { timeZone: TZ, day: 'numeric', month: 'short' } : spanH > 20 ? { timeZone: TZ, weekday: 'short', hour: '2-digit', minute: '2-digit' } : { timeZone: TZ, hour: '2-digit', minute: '2-digit' }).format(new Date(t));
+      g += `<text x="${x(t)}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === nx - 1 ? 'end' : 'middle'}">${esc(lab)}</text>`;
+    }
+    const paths = ids.map((id, k) => `<path d="${rows.map((r, i) => (i ? 'L' : 'M') + x(ts[i]).toFixed(1) + ' ' + y(r[k + 1]).toFixed(1)).join(' ')}" fill="none" stroke="${col[id]}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`).reverse().join('');
+    // end labels, nudged apart so they never overlap
+    const lx = x(ts.at(-1)), ends = ids.map((id, k) => ({ id, v: rows.at(-1)[k + 1], yy: y(rows.at(-1)[k + 1]) })).sort((a, b) => a.yy - b.yy);
+    for (let i = 1; i < ends.length; i++) if (ends[i].yy - ends[i - 1].yy < 14) ends[i].yy = ends[i - 1].yy + 14;
+    const dots = ends.map(e => `<circle cx="${lx}" cy="${y(e.v)}" r="4" fill="${col[e.id]}" stroke="${surf}" stroke-width="2"/>`).join('');
+    const endLabels = m.r > 40 ? ends.map(e => `<text x="${lx + 10}" y="${e.yy + 4}" style="fill:var(--text-primary);font-size:12px;font-weight:600">${esc(label[e.id])}</text>`).join('') : '';
+    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Side-by-side test: account value of each rule set and buy-and-hold">
+      <g class="axis">${g}</g><line class="refline" x1="${m.l}" x2="${m.l + iw}" y1="${y(start)}" y2="${y(start)}"/>
+      ${paths}${dots}${endLabels}
+      <g class="hov" style="display:none"><line class="hx" y1="${m.t}" y2="${m.t + ih}" stroke="var(--text-muted)" stroke-width="1"/>${ids.map(id => `<circle class="h-${id}" r="4" fill="${col[id]}" stroke="${surf}" stroke-width="2"/>`).join('')}</g>
+      <rect class="hit" x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent"/></svg><div class="tip"></div>`;
+    const svg = box.querySelector('svg'), hov = box.querySelector('.hov'), tip = box.querySelector('.tip'), hit = box.querySelector('.hit');
+    const names = Object.fromEntries(cmp.lines.map(l => [l.id, l.name]));
+    const move = (ev) => {
+      const r = svg.getBoundingClientRect(), sx = (ev.clientX - r.left) * (W / r.width), t = t0 + (sx - m.l) / iw * (t1 - t0);
+      let i = 0, best = Infinity; ts.forEach((tt, k) => { const d = Math.abs(tt - t); if (d < best) { best = d; i = k; } });
+      const px = x(ts[i]); hov.style.display = '';
+      hov.querySelector('.hx').setAttribute('x1', px); hov.querySelector('.hx').setAttribute('x2', px);
+      ids.forEach((id, k) => { const c = hov.querySelector('.h-' + id); c.setAttribute('cx', px); c.setAttribute('cy', y(rows[i][k + 1])); });
+      const order = ids.map((id, k) => [id, rows[i][k + 1]]).sort((a, b) => b[1] - a[1]);
+      tip.innerHTML = `<div class="t">${esc(fmtTime(rows[i][0]))}</div>` + order.map(([id, v]) => `<div class="row"><span><i class="sw" style="background:${col[id]}"></i>${esc(names[id])}</span><b>${esc(gbp.format(v))}</b></div>`).join('');
+      tip.style.display = 'block'; const bx = px * (r.width / W), tw = tip.offsetWidth;
+      tip.style.left = (bx + 12 + tw > r.width ? Math.max(0, bx - tw - 12) : bx + 12) + 'px'; tip.style.top = '8px';
+    };
+    hit.addEventListener('pointermove', move); hit.addEventListener('pointerdown', move);
+    hit.addEventListener('pointerleave', () => { hov.style.display = 'none'; tip.style.display = 'none'; });
+  }
+
+  function compareSection(cmp) {
+    if (!cmp) return '';
+    const best = cmp.lines.filter(l => l.id !== 'H').reduce((a, b) => (b.ret > a.ret ? b : a));
+    const legend = cmp.series.map(id => `<span class="key"><i class="swatch" style="background:var(${CMP[id]})"></i>${esc(id === 'H' ? 'Buy & hold' : id)}</span>`).join('');
+    const rowsHtml = cmp.lines.map(l => `<tr><td class="nw"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;background:var(${CMP[l.id]})"></i><b>${esc(l.name)}</b></td>
+      <td class="reason">${esc(l.desc)}</td><td class="num ${cls(l.ret)}">${esc(pct(l.ret))}</td>
+      <td class="num">${l.closed == null ? '—' : num.format(l.closed)}</td>
+      <td class="num">${l.closed ? Math.round(l.wins / l.closed * 100) + '%' : '—'}</td>
+      <td class="dim">${l.open ? esc(l.open.map(m => m.replace('-GBP', '')).join(' ') || 'none') : '—'}</td></tr>`).join('');
+    const days = (Date.now() - toDate(cmp.started)) / 86400000;
+    return `<section class="card section"><div class="head"><h2>Side-by-side rules test</h2><span class="sub">since ${esc(fmtTime(cmp.started))} · every line starts at ${esc(gbp0.format(10000))} · same prices and Jev answers</span>
+        <div class="legend">${legend}</div></div>
+      <div class="body"><div class="chart-box" id="cmpchart"></div>
+        <div class="scroll" style="margin-top:12px"><table><thead><tr><th>Rules</th><th>What they do</th><th class="num">Since test start</th><th class="num">Closed trades</th><th class="num">Won</th><th>Open now</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+        <div class="sub" style="margin-top:8px">${days < 60 ? `Too early to pick a winner — give it 60 days and 30+ closed trades per line. Ahead right now: ${esc(best.name)}.` : `Ahead: ${esc(best.name)}.`} If C keeps pace with A, Jev isn’t adding much.</div>
+      </div></section>`;
+  }
+
   // ---------- Jev's latest read per market ----------
   function readCard(market, d, snap) {
     if (!d) return '';
@@ -529,6 +606,8 @@ footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-t
 
       ${s.verdict ? verdictBlock(s) : ''}
 
+      ${compareSection(snap.compare)}
+
       <section class="grid-2">
         <div class="card">
           <div class="head"><h2>Account value</h2><span class="sub">bot vs simply buying and holding</span>
@@ -583,6 +662,7 @@ footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-t
       </section>`;
 
     drawChart($('#chart'), eqPts, start);
+    if (snap.compare) drawCompare($('#cmpchart'), snap.compare, start);
   }
 
   function notice(title, text) {
@@ -602,7 +682,7 @@ footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-t
   }
 
   let resizeT;
-  window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => state.snap && drawChart($('#chart'), state.snap.equity || [], state.snap.starting_cash || 10000), 150); });
+  window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (!state.snap) return; drawChart($('#chart'), state.snap.equity || [], state.snap.starting_cash || 10000); if (state.snap.compare) drawCompare($('#cmpchart'), state.snap.compare, state.snap.starting_cash || 10000); }, 150); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => state.snap && render(state.snap));
   setInterval(load, 60000);
   setInterval(() => state.snap && setStatus(state.snap), 20000);
