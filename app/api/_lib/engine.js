@@ -63,6 +63,8 @@ export async function runCycle(st, cfg, rules, { token, deps = {}, startedAt = D
   const push = (k, row) => { st[k].push({ time: now(), ...row }); if (st[k].length > KEEP[k]) st[k].splice(0, st[k].length - KEEP[k]); };
   const event = (level, message) => push('events', { level, message });
   const markets = cfg.markets.filter(m => !st.unavailable.includes(m));
+  // one-off: every error logged before skips existed was Jev being busy (HTTP 429/503)
+  if (st.stats.skips == null) { st.stats.skips = st.stats.errors; st.stats.errors = 0; }
 
   // 1. prices (parallel)
   const data = {};
@@ -100,8 +102,23 @@ export async function runCycle(st, cfg, rules, { token, deps = {}, startedAt = D
     try { ind = indicators(data[m].candles, prices[m]); } catch (e) { event('WARN', `${m}: ${e.message}`); return; }
     const state = buildState(m, ind, cfg.candle_seconds, deps.now ? deps.now() : new Date());
     try { replies[m] = await ask({ url: cfg.jev_url, model: cfg.jev_model, token, state, questions: rules.questions }); }
-    catch (e) { replies[m] = { error: e instanceof JevError ? e.message : `unexpected: ${e.message}` }; }
+    catch (e) { replies[m] = { error: e instanceof JevError ? e.message : `unexpected: ${e.message}`, busy: !!e.busy, state }; }
   });
+
+  // 3b. second try for coins Jev was too busy to answer, after a short pause
+  const busyList = ask_list.filter(m => replies[m]?.busy);
+  if (busyList.length && (deps.askJev || Date.now() - startedAt < budgetMs - 30000)) {
+    if (!deps.askJev) await new Promise(r => setTimeout(r, cfg.jev_retry_pause_ms || 5000));
+    await pool(busyList, 1, async (m) => {
+      if (!deps.askJev && Date.now() - startedAt > budgetMs) return;
+      if (!deps.askJev && cfg.jev_gap_ms) await new Promise(r => setTimeout(r, cfg.jev_gap_ms));
+      try {
+        const rep = await ask({ url: cfg.jev_url, model: cfg.jev_model, token, state: replies[m].state, questions: rules.questions, retries: 2 });
+        st.stats.second_tries = (st.stats.second_tries || 0) + 1;
+        replies[m] = rep;
+      } catch (e) { replies[m] = { error: e instanceof JevError ? e.message : `unexpected: ${e.message}`, busy: !!e.busy }; }
+    });
+  }
 
   if (outOfTime) event('WARN', `ran out of time - ${outOfTime} coin(s) not checked this round`);
 
@@ -119,9 +136,15 @@ export async function runCycle(st, cfg, rules, { token, deps = {}, startedAt = D
     const rep = replies[m]; if (!rep) continue;
     const base = { engine: 'jev', market: m, price, position_open: !!pos };
     if (rep.error) {
-      st.stats.errors++;
-      event('ERROR', `${m}: ${rep.error} - no action taken`);
-      push('decisions', { ...base, answers: '', action: 'NONE', reason: `Jev error: ${rep.error}`, jev_seconds: '', input_tokens: '', output_tokens: '', cost_usd: '' });
+      if (rep.busy) {
+        st.stats.skips = (st.stats.skips || 0) + 1;
+        event('SKIP', `${m}: Jev was busy even after a second try - skipped this round, will check again next round`);
+        push('decisions', { ...base, answers: '', action: 'NONE', reason: `Skipped: ${rep.error}`, jev_seconds: '', input_tokens: '', output_tokens: '', cost_usd: '' });
+      } else {
+        st.stats.errors++;
+        event('ERROR', `${m}: ${rep.error} - no action taken`);
+        push('decisions', { ...base, answers: '', action: 'NONE', reason: `Jev error: ${rep.error}`, jev_seconds: '', input_tokens: '', output_tokens: '', cost_usd: '' });
+      }
       continue;
     }
     const u = rep.usage || {};
@@ -196,7 +219,7 @@ export function summary(st) {
     fees: st.fees_paid, open: Object.keys(st.positions),
     checks: st.stats.checks, errors: st.stats.errors, tokens: st.stats.tokens,
     avg_secs: st.stats.checks ? st.stats.secs / st.stats.checks : 0,
-    cost: st.stats.cost, costed: st.stats.costed, retries: st.stats.retries, by_reason,
+    cost: st.stats.cost, costed: st.stats.costed, retries: st.stats.retries, skips: st.stats.skips || 0, second_tries: st.stats.second_tries || 0, by_reason,
     min_trades: MIN_TRADES, min_days: MIN_DAYS,
   };
   s.verdict = verdict(s);
@@ -235,7 +258,7 @@ export function snapshot(st, cfg, rules, credits = null) {
     equity: downsample(st.equity.map(r => [r.time, r.equity, r.benchmark_equity]), 1500),
     trades: st.trades.slice(-200),
     decisions: st.decisions.slice(-60),
-    events: st.events.filter(e => e.level === 'WARN' || e.level === 'ERROR').slice(-30),
+    events: st.events.filter(e => (e.level === 'WARN' || e.level === 'ERROR' || e.level === 'SKIP') && !(e.level === 'ERROR' && /Jev unavailable after/.test(e.message))).slice(-30),
     credits,
   };
 }

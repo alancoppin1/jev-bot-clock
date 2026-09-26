@@ -543,6 +543,7 @@ footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-t
           <div class="card"><div class="head"><h2>Jev &amp; Vercel</h2></div><div class="body"><dl class="kv">
             <dt>Jev checks</dt><dd>${num.format(s.checks || 0)}</dd>
             <dt>Errors</dt><dd>${num.format(s.errors || 0)}</dd>
+            ${s.skips != null ? `<dt>Skipped (Jev busy)</dt><dd>${num.format(s.skips)}</dd>` : ''}
             ${s.retries != null ? `<dt>Retries (Jev busy)</dt><dd>${num.format(s.retries)}</dd>` : ''}
             <dt>Average answer time</dt><dd>${((s.avg_secs || 0)).toFixed(2)} s</dd>
             <dt>Tokens used</dt><dd>${num.format(s.tokens || 0)}</dd>
@@ -576,7 +577,7 @@ footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-t
               <li>simulated slippage ${snap.risk.slippage_pct}% on ${esc((snap.risk.major_markets || []).map(m => m.replace('-GBP', '')).join(' & ') || 'all coins')}${snap.risk.slippage_pct_other != null && (snap.risk.major_markets || []).length ? `, ${snap.risk.slippage_pct_other}% on the rest` : ''}</li></ul>` : ''}
           </div></div>
           ${(snap.events || []).length ? `<div class="card"><div class="head"><h2>Warnings</h2></div><div class="body"><ul class="events" style="list-style:none;padding:0;margin:0">
-            ${snap.events.slice().reverse().slice(0, 8).map(e => `<li>${e.level === 'ERROR' ? icon.bad : icon.warn}<span class="lvl">${esc(e.level)}</span>${esc(fmtTime(e.time))} &middot; ${esc(e.message)}</li>`).join('').replace(/class="icon"/g, 'class="icon" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"')}
+            ${snap.events.slice().reverse().slice(0, 8).map(e => `<li>${e.level === 'ERROR' ? icon.bad : icon.warn}<span class="lvl" style="color:${e.level === 'ERROR' ? 'var(--critical-text)' : 'var(--serious)'}">${esc(e.level === 'SKIP' ? 'Skipped' : e.level === 'ERROR' ? 'Error' : 'Warning')}</span>${esc(fmtTime(e.time))} &middot; ${esc(e.message)}</li>`).join('').replace(/class="icon"/g, 'class="icon" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"')}
           </ul></div></div>` : ''}
         </div>
       </section>`;

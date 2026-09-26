@@ -44,5 +44,7 @@ export async function askJev({ url, model, token, state, questions, retries = 5,
     const ra = parseFloat(r.headers.get('retry-after') || '');
     await sleep(Number.isFinite(ra) ? Math.min(ra * 1000, 15000) : Math.min(1500 * 2 ** attempt, 12000) + Math.random() * 500);
   }
-  throw new JevError(`Jev unavailable after ${retries + 1} attempts (${lastErr})`);
+  const busy = new JevError(`Jev busy after ${retries + 1} attempts (${lastErr})`);
+  busy.busy = true;   // temporary: rate-limited or overloaded, worth trying again later
+  throw busy;
 }
