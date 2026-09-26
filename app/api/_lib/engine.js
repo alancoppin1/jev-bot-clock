@@ -327,7 +327,7 @@ export function snapshot(st, cfg, rules, credits = null) {
     positions, prices, latest,
     equity: downsample(withLive(st).map(r => [r.time, r.equity, r.benchmark_equity]), 1500),
     compare: compareBlock(st),
-    news: st.news ? { time: st.news.time, fng: st.news.fng, headlines: st.news.headlines, mentioned: st.news.mentioned, view: newsView(st.news.answers) } : null,
+    news: st.news ? { time: st.news.time, fng: st.news.fng, headlines: st.news.headlines, mentioned: st.news.mentioned, errors: st.news.errors || [], view: newsView(st.news.answers) } : null,
     trades: st.trades.slice(-200),
     decisions: st.decisions.slice(-60),
     events: st.events.filter(e => (e.level === 'WARN' || e.level === 'ERROR' || e.level === 'SKIP') && !(e.level === 'ERROR' && /Jev unavailable after/.test(e.message)) && Date.now() - Date.parse(e.time) < 86400000).slice(-30),   // last 24 hours only
