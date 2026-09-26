@@ -1,0 +1,9 @@
+{
+  "name": "jev-dashboard",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@vercel/blob": "^2.8.0",
+    "@vercel/oidc": "^3.8.9"
+  }
+}

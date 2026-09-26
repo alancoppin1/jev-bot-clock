@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jev Paper Trader</title>
+<meta name="description" content="Live dashboard for Alan's Jev paper-trading bot - fake money only.">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f4f2;
+  --surface-1: #fcfcfb;
+  --surface-2: #f0efec;
+  --border: #e3e2de;
+  --grid: #e8e7e3;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #7a7974;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --seq-track: #cde2fb;
+  --seq-fill: #2a78d6;
+  --good: #0ca30c;
+  --good-text: #006300;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --critical-text: #b42f2f;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 1px 1px rgba(0,0,0,.03);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211;
+    --surface-1: #1a1a19;
+    --surface-2: #232321;
+    --border: #2e2e2b;
+    --grid: #2a2a28;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8f8e86;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --seq-track: #184f95;
+    --seq-fill: #5598e7;
+    --good-text: #3fcb3f;
+    --critical-text: #ef7a7a;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211;
+  --surface-1: #1a1a19;
+  --surface-2: #232321;
+  --border: #2e2e2b;
+  --grid: #2a2a28;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #8f8e86;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --seq-track: #184f95;
+  --seq-fill: #5598e7;
+  --good-text: #3fcb3f;
+  --critical-text: #ef7a7a;
+  --shadow: none;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  font: 14px/1.5 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-bottom: 20px; }
+header.top h1 { font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+.sub { color: var(--text-secondary); font-size: 13px; }
+.spacer { flex: 1; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 500; border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); white-space: nowrap; }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
+.pill.live .dot { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 20%, transparent); }
+.pill.stale .dot { background: var(--warning); }
+.pill.down .dot { background: var(--critical); }
+button.theme { border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary);
+  border-radius: 8px; padding: 5px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+.card h2 { font-size: 14px; font-weight: 600; margin: 0; }
+.card .head { display: flex; align-items: baseline; gap: 10px; padding: 16px 18px 0; flex-wrap: wrap; }
+.card .head .sub { font-size: 12px; }
+.card .body { padding: 14px 18px 18px; }
+
+.hero { display: grid; grid-template-columns: minmax(260px, 1.2fr) 3fr; gap: 16px; margin-bottom: 16px; }
+.hero-main { padding: 20px 22px; }
+.label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+.hero-value { font-size: 48px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; margin: 6px 0 8px; font-variant-numeric: proportional-nums; }
+.delta { font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
+.delta.up { color: var(--good-text); }
+.delta.down { color: var(--critical-text); }
+.delta.flat { color: var(--text-secondary); }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.tile { padding: 16px 18px; }
+.tile .value { font-size: 22px; font-weight: 600; margin-top: 4px; letter-spacing: -0.01em; }
+.tile .note { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+.verdict { display: flex; gap: 12px; align-items: flex-start; padding: 14px 18px; margin-bottom: 16px; }
+.verdict .icon { flex: none; width: 22px; height: 22px; }
+.verdict .title { font-weight: 600; }
+.verdict .text { color: var(--text-secondary); font-size: 13px; }
+.progress { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 8px; }
+.progress .meter { width: 180px; }
+.meter-track { height: 6px; border-radius: 3px; background: var(--seq-track); overflow: hidden; margin-top: 4px; }
+.meter-fill { height: 100%; background: var(--seq-fill); border-radius: 3px; }
+.meter-caption { font-size: 12px; color: var(--text-secondary); }
+
+.grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px; }
+.stack { display: grid; gap: 16px; align-content: start; }
+.hero > *, .grid-2 > *, .stack > *, .tiles > *, .reads > * { min-width: 0; }
+td.nw { white-space: nowrap; }
+.more { margin-top: 4px; }
+
+.legend { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-left: auto; }
+.legend .key { display: inline-flex; align-items: center; gap: 6px; }
+.legend .swatch { width: 14px; height: 2px; border-radius: 1px; }
+.chart-box { position: relative; }
+.chart-box svg { display: block; width: 100%; height: auto; overflow: visible; }
+.axis text { fill: var(--text-muted); font-size: 11px; font-family: inherit; }
+.gridline { stroke: var(--grid); stroke-width: 1; }
+.refline { stroke: var(--text-muted); stroke-width: 1; opacity: .5; }
+.tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12); min-width: 170px; display: none; z-index: 2; }
+.tip .t { color: var(--text-secondary); margin-bottom: 4px; }
+.tip .row { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+.tip .row span:first-child { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+.tip .sw { width: 8px; height: 8px; border-radius: 50%; }
+.empty { color: var(--text-secondary); font-size: 13px; padding: 32px 0; text-align: center; }
+
+.reads { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.read { padding: 16px 18px; }
+.read .top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.read .mkt { font-weight: 600; font-size: 15px; }
+.read .px { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.read .when { font-size: 12px; color: var(--text-muted); }
+.qa { display: grid; grid-template-columns: 110px 1fr; gap: 6px 10px; margin-top: 12px; font-size: 13px; align-items: center; }
+.qa .q { color: var(--text-secondary); }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.chip .conf { font-weight: 400; color: var(--text-secondary); font-size: 12px; }
+.mini { display: flex; align-items: center; gap: 8px; }
+.mini .meter-track { flex: 1; margin: 0; }
+.mini span { font-size: 12px; color: var(--text-secondary); min-width: 36px; text-align: right; }
+.action { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-secondary); }
+.badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; margin-right: 6px;
+  background: var(--surface-2); color: var(--text-primary); letter-spacing: .02em; }
+.badge.buy { background: color-mix(in srgb, var(--good) 18%, var(--surface-1)); color: var(--good-text); }
+.badge.sell { background: color-mix(in srgb, var(--critical) 16%, var(--surface-1)); color: var(--critical-text); }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 500; color: var(--text-secondary); font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.dim { color: var(--text-secondary); }
+td.reason { color: var(--text-secondary); font-size: 12px; max-width: 360px; min-width: 220px; }
+.pos { color: var(--good-text); }
+.neg { color: var(--critical-text); }
+.scroll { overflow-x: auto; }
+.section { margin-bottom: 16px; }
+dl.kv { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; margin: 0; font-size: 13px; }
+dl.kv dt { color: var(--text-secondary); }
+dl.kv dd { margin: 0; text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; }
+ul.rules { margin: 6px 0 12px; padding-left: 18px; font-size: 13px; }
+ul.rules li { margin: 3px 0; }
+.rules-h { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
+details summary { cursor: pointer; color: var(--text-secondary); font-size: 12px; margin-top: 10px; }
+.events li { font-size: 12px; margin: 4px 0; color: var(--text-secondary); }
+.events .lvl { font-weight: 600; margin-right: 6px; }
+footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 24px; }
+.notice { padding: 40px 24px; text-align: center; }
+.notice h2 { font-size: 18px; margin: 0 0 6px; }
+
+@media (max-width: 900px) {
+  .hero, .grid-2 { grid-template-columns: 1fr; }
+  .tiles { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 520px) {
+  .hero-value { font-size: 40px; }
+  .tiles { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .tile .value { font-size: 18px; }
+  .qa { grid-template-columns: 96px 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Jev Paper Trader</h1>
+      <div class="sub" id="subtitle">Fake money only &middot; decisions by Jev</div>
+    </div>
+    <div class="spacer"></div>
+    <span class="pill" id="status"><span class="dot"></span><span id="status-text">Loading&hellip;</span></span>
+    <button class="theme" id="theme" type="button" aria-label="Switch light or dark">Theme</button>
+  </header>
+  <main id="app"></main>
+  <footer>Paper trading only &mdash; no real money is used and nothing here is investment advice. The page refreshes itself every minute.</footer>
+</div>
+
+<script>
+(() => {
+  const $ = (s, el = document) => el.querySelector(s);
+  const app = $('#app');
+  const TZ = 'Europe/London';
+  const gbp = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
+  const gbp0 = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 });
+  const usd = (v, d = 2) => '$' + Number(v).toFixed(d);
+  // Coin prices: pounds and pence for normal prices, more digits for sub-penny coins.
+  const px = (v) => { v = +v; if (!isFinite(v)) return '\u2014'; if (Math.abs(v) >= 1) return gbp.format(v); return '\u00a3' + Number(v.toPrecision(4)).toString(); };
+  const num = new Intl.NumberFormat('en-GB');
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const pct = (v, d = 2) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(d) + '%';
+  const signed = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + gbp.format(Math.abs(v));
+  const cls = (v) => v > 0 ? 'pos' : v < 0 ? 'neg' : '';
+  const toDate = (iso) => new Date(iso);
+  const fmtTime = (iso, opts = {}) => new Intl.DateTimeFormat('en-GB', { timeZone: TZ, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', ...opts }).format(toDate(iso));
+  const ago = (iso) => {
+    const s = Math.max(0, (Date.now() - toDate(iso)) / 1000);
+    if (s < 90) return 'just now';
+    if (s < 3600) return Math.round(s / 60) + ' min ago';
+    if (s < 86400) return Math.round(s / 3600) + ' h ago';
+    return Math.round(s / 86400) + ' days ago';
+  };
+
+  // ---------- theme toggle (per viewer, optional storage) ----------
+  const themeBtn = $('#theme');
+  const applyTheme = (t) => { if (t) document.documentElement.setAttribute('data-theme', t); else document.documentElement.removeAttribute('data-theme'); };
+  try { applyTheme(localStorage.getItem('jev-theme')); } catch {}
+  themeBtn.addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    try { localStorage.setItem('jev-theme', next); } catch {}
+    if (state.snap) render(state.snap);
+  });
+
+  const state = { snap: null };
+
+  // ---------- parse Jev's answers "trend=down@0.99 momentum=2.64@0.70 overextended=0.04" ----------
+  function parseAnswers(s) {
+    const out = {};
+    (s || '').split(/\s+/).filter(Boolean).forEach(tok => {
+      const m = tok.match(/^([^=]+)=([^@]+)(?:@([\d.]+))?$/);
+      if (m) out[m[1]] = { value: m[2], conf: m[3] !== undefined ? parseFloat(m[3]) : null };
+    });
+    return out;
+  }
+
+  // ---------- status pill ----------
+  function setStatus(snap) {
+    const pill = $('#status'), txt = $('#status-text');
+    pill.classList.remove('live', 'stale', 'down');
+    if (!snap || !snap.generated_at) { txt.textContent = 'Waiting for first update'; return; }
+    const ageMin = (Date.now() - toDate(snap.generated_at)) / 60000;
+    const limit = (snap.check_every_minutes || 15) * 2 + 3;
+    if (ageMin <= limit) { pill.classList.add('live'); txt.textContent = 'Live · updated ' + ago(snap.generated_at); }
+    else if (ageMin <= 180) { pill.classList.add('stale'); txt.textContent = 'Late · last update ' + ago(snap.generated_at); }
+    else { pill.classList.add('down'); txt.textContent = 'Not updating · last ' + ago(snap.generated_at); }
+  }
+
+  // ---------- icons ----------
+  const icon = {
+    info: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-5M12 8h.01"/></svg>',
+    good: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--good)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg>',
+    bad: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--critical)" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>',
+    warn: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--serious)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 17h.01"/></svg>',
+  };
+
+  function verdictBlock(sum) {
+    const v = sum.verdict || '';
+    let kind = 'info', title = 'Too early to judge';
+    if (v.startsWith('NOT WORKING')) { kind = 'bad'; title = 'Not beating buy-and-hold'; }
+    else if (v.startsWith('BEATING')) { kind = 'good'; title = 'Beating buy-and-hold on paper'; }
+    const body = v.replace(/^[A-Z \-]+\.\s*/, '');
+    const tradesPct = Math.min(100, (sum.closed || 0) / (sum.min_trades || 30) * 100);
+    const daysPct = Math.min(100, (sum.days || 0) / (sum.min_days || 60) * 100);
+    return `<div class="card verdict">
+      ${icon[kind]}
+      <div style="flex:1">
+        <div class="title">${esc(title)}</div>
+        <div class="text">${esc(body)}</div>
+        <div class="progress">
+          <div class="meter"><div class="meter-caption">Closed trades: ${sum.closed || 0} of ${sum.min_trades || 30}</div>
+            <div class="meter-track"><div class="meter-fill" style="width:${tradesPct}%"></div></div></div>
+          <div class="meter"><div class="meter-caption">Days tested: ${Math.floor(sum.days || 0)} of ${sum.min_days || 60}</div>
+            <div class="meter-track"><div class="meter-fill" style="width:${daysPct}%"></div></div></div>
+        </div>
+      </div></div>`;
+  }
+
+  // ---------- equity chart (hand-drawn SVG) ----------
+  function niceStep(range, target) {
+    const raw = range / target, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+    return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
+  }
+
+  function drawChart(box, pts, start) {
+    if (!pts || pts.length < 2) {
+      box.innerHTML = '<div class="empty">The chart appears once the bot has made its second check.</div>';
+      return;
+    }
+    const css = getComputedStyle(document.documentElement);
+    const c1 = css.getPropertyValue('--series-1').trim(), c2 = css.getPropertyValue('--series-2').trim();
+    const surf = css.getPropertyValue('--surface-1').trim();
+    const W = Math.max(320, box.clientWidth || 700), H = W < 520 ? 240 : 300;
+    const m = { l: 64, r: W < 520 ? 12 : 118, t: 12, b: 28 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const ts = pts.map(p => toDate(p[0]).getTime());
+    const vals = pts.flatMap(p => [p[1], p[2]]).concat([start]);
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    const pad = Math.max((hi - lo) * 0.12, start * 0.002);
+    lo -= pad; hi += pad;
+    const step = niceStep(hi - lo, 5);
+    lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+    const t0 = ts[0], t1 = ts[ts.length - 1] === t0 ? t0 + 1 : ts[ts.length - 1];
+    const x = t => m.l + (t - t0) / (t1 - t0) * iw;
+    const y = v => m.t + (1 - (v - lo) / (hi - lo)) * ih;
+
+    let g = '';
+    for (let v = lo; v <= hi + step / 2; v += step) {
+      g += `<line class="gridline" x1="${m.l}" x2="${m.l + iw}" y1="${y(v)}" y2="${y(v)}"/>`;
+      g += `<text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${esc(gbp0.format(v))}</text>`;
+    }
+    const nx = W < 520 ? 3 : 5, spanH = (t1 - t0) / 3.6e6;
+    for (let i = 0; i < nx; i++) {
+      const t = t0 + (t1 - t0) * i / (nx - 1);
+      const label = new Intl.DateTimeFormat('en-GB', spanH > 24 * 8 ? { timeZone: TZ, day: 'numeric', month: 'short' } : spanH > 20 ? { timeZone: TZ, weekday: 'short', hour: '2-digit', minute: '2-digit' } : { timeZone: TZ, hour: '2-digit', minute: '2-digit' }).format(new Date(t));
+      g += `<text x="${x(t)}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === nx - 1 ? 'end' : 'middle'}">${esc(label)}</text>`;
+    }
+    const path = k => pts.map((p, i) => (i ? 'L' : 'M') + x(ts[i]).toFixed(1) + ' ' + y(p[k]).toFixed(1)).join(' ');
+    const last = pts[pts.length - 1], lx = x(ts[ts.length - 1]);
+    const yb = y(last[1]), yh = y(last[2]);
+    let endLabels = '';
+    if (m.r > 60 && Math.abs(yb - yh) >= 16) {
+      endLabels = `<text x="${lx + 10}" y="${yb + 4}" style="fill:var(--text-primary);font-size:12px;font-weight:600">Bot ${esc(gbp0.format(last[1]))}</text>
+                   <text x="${lx + 10}" y="${yh + 4}" style="fill:var(--text-secondary);font-size:12px">Hold ${esc(gbp0.format(last[2]))}</text>`;
+    }
+    box.innerHTML = `
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Account value over time: bot versus buy-and-hold">
+        <g class="axis">${g}</g>
+        <line class="refline" x1="${m.l}" x2="${m.l + iw}" y1="${y(start)}" y2="${y(start)}"/>
+        <text x="${m.l + iw - 4}" y="${y(start) + 14}" text-anchor="end" style="fill:var(--text-muted);font-size:11px">Start ${esc(gbp0.format(start))}</text>
+        <path d="${path(2)}" fill="none" stroke="${c2}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+        <path d="${path(1)}" fill="none" stroke="${c1}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+        <circle cx="${lx}" cy="${yh}" r="4" fill="${c2}" stroke="${surf}" stroke-width="2"/>
+        <circle cx="${lx}" cy="${yb}" r="4" fill="${c1}" stroke="${surf}" stroke-width="2"/>
+        ${endLabels}
+        <g id="hover" style="display:none">
+          <line id="hx" y1="${m.t}" y2="${m.t + ih}" stroke="var(--text-muted)" stroke-width="1"/>
+          <circle id="h2" r="4" fill="${c2}" stroke="${surf}" stroke-width="2"/>
+          <circle id="h1" r="4" fill="${c1}" stroke="${surf}" stroke-width="2"/>
+        </g>
+        <rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="hit"/>
+      </svg>
+      <div class="tip" id="tip"></div>`;
+
+    const svg = box.querySelector('svg'), hit = box.querySelector('#hit'), hov = box.querySelector('#hover'), tip = box.querySelector('#tip');
+    const move = (ev) => {
+      const r = svg.getBoundingClientRect(), sx = (ev.clientX - r.left) * (W / r.width);
+      const t = t0 + (sx - m.l) / iw * (t1 - t0);
+      let i = 0, best = Infinity;
+      ts.forEach((tt, k) => { const d = Math.abs(tt - t); if (d < best) { best = d; i = k; } });
+      const p = pts[i], px = x(ts[i]);
+      hov.style.display = '';
+      hov.querySelector('#hx').setAttribute('x1', px); hov.querySelector('#hx').setAttribute('x2', px);
+      hov.querySelector('#h1').setAttribute('cx', px); hov.querySelector('#h1').setAttribute('cy', y(p[1]));
+      hov.querySelector('#h2').setAttribute('cx', px); hov.querySelector('#h2').setAttribute('cy', y(p[2]));
+      const diff = p[1] - p[2];
+      tip.innerHTML = `<div class="t">${esc(fmtTime(p[0]))}</div>
+        <div class="row"><span><i class="sw" style="background:${c1}"></i>Bot</span><b>${esc(gbp.format(p[1]))}</b></div>
+        <div class="row"><span><i class="sw" style="background:${c2}"></i>Buy &amp; hold</span><b>${esc(gbp.format(p[2]))}</b></div>
+        <div class="row"><span>Difference</span><b class="${cls(diff)}">${esc(signed(diff))}</b></div>`;
+      tip.style.display = 'block';
+      const bx = px * (r.width / W), tw = tip.offsetWidth;
+      tip.style.left = Math.min(Math.max(0, bx + 12), r.width - tw) + 'px';
+      tip.style.top = '8px';
+      if (bx + 12 + tw > r.width) tip.style.left = Math.max(0, bx - tw - 12) + 'px';
+    };
+    const leave = () => { hov.style.display = 'none'; tip.style.display = 'none'; };
+    hit.addEventListener('pointermove', move);
+    hit.addEventListener('pointerdown', move);
+    hit.addEventListener('pointerleave', leave);
+  }
+
+  // ---------- Jev's latest read per market ----------
+  function readCard(market, d, snap) {
+    if (!d) return '';
+    const a = parseAnswers(d.answers);
+    const qs = (snap.rules && snap.rules.questions) || {};
+    const rows = [];
+    for (const [key, ans] of Object.entries(a)) {
+      const q = qs[key] || {};
+      const name = key.charAt(0).toUpperCase() + key.slice(1);
+      if (q.type === 'choice') {
+        rows.push(`<div class="q">${esc(name)}</div><div><span class="chip">${esc(ans.value)}<span class="conf">${ans.conf != null ? Math.round(ans.conf * 100) + '% sure' : ''}</span></span></div>`);
+      } else if (q.type === 'score') {
+        const crit = Array.isArray(q.criteria) ? q.criteria : [];
+        const v = parseFloat(ans.value), n = Math.max(1, crit.length - 1);
+        const lbl = crit[Math.round(v)] || v.toFixed(2);
+        rows.push(`<div class="q">${esc(name)}</div><div><div class="chip">${esc(lbl)}<span class="conf">${v.toFixed(1)} of ${n}</span></div>
+          <div class="mini"><div class="meter-track"><div class="meter-fill" style="width:${Math.max(0, Math.min(100, v / n * 100))}%"></div></div></div></div>`);
+      } else {
+        const v = parseFloat(ans.value);
+        rows.push(`<div class="q">${esc(name)}</div><div class="mini"><div class="meter-track"><div class="meter-fill" style="width:${Math.max(0, Math.min(100, v * 100))}%"></div></div><span>${Math.round(v * 100)}%</span></div>`);
+      }
+    }
+    const act = (d.action || 'NONE').toUpperCase();
+    const badge = act === 'BUY' ? '<span class="badge buy">BUY</span>' : act === 'SELL' ? '<span class="badge sell">SELL</span>' : act === 'HOLD' ? '<span class="badge">HOLD</span>' : '<span class="badge">NO TRADE</span>';
+    return `<div class="card read">
+      <div class="top"><span class="mkt">${esc(market)}</span><span class="px">${esc(px(d.price))}</span></div>
+      <div class="when">Jev's read at ${esc(fmtTime(d.time))}${d.jev_seconds ? ' · answered in ' + (+d.jev_seconds).toFixed(1) + ' s' : ''}</div>
+      <div class="qa">${rows.join('') || '<div class="q">No answers</div><div></div>'}</div>
+      <div class="action">${badge}${esc(d.reason || '')}</div>
+    </div>`;
+  }
+
+  // ---------- Jev's latest read as one table (used when there are many coins) ----------
+  function readsTable(snap) {
+    const qs = (snap.rules && snap.rules.questions) || {};
+    const keys = Object.keys(qs);
+    const held = new Set((snap.positions || []).map(p => p.market));
+    const rows = (snap.markets || []).map(mk => ({ mk, d: (snap.latest || {})[mk] })).filter(r => r.d);
+    rows.sort((a, b) => (held.has(b.mk) - held.has(a.mk)));
+    const cell = (key, ans) => {
+      if (!ans) return '<td class="dim">—</td>';
+      const q = qs[key] || {};
+      if (q.type === 'choice') return `<td class="nw"><b>${esc(ans.value)}</b> <span class="dim">${ans.conf != null ? Math.round(ans.conf * 100) + '%' : ''}</span></td>`;
+      if (q.type === 'score') {
+        const crit = Array.isArray(q.criteria) ? q.criteria : [], v = parseFloat(ans.value);
+        return `<td class="nw">${esc(crit[Math.round(v)] || v.toFixed(1))} <span class="dim">${v.toFixed(1)}</span></td>`;
+      }
+      const v = parseFloat(ans.value);
+      return `<td class="num"><div class="mini" style="min-width:90px"><div class="meter-track"><div class="meter-fill" style="width:${Math.max(0, Math.min(100, v * 100))}%"></div></div><span>${Math.round(v * 100)}%</span></div></td>`;
+    };
+    const badge = (act) => act === 'BUY' ? '<span class="badge buy">BUY</span>' : act === 'SELL' ? '<span class="badge sell">SELL</span>' : act === 'HOLD' ? '<span class="badge">HOLD</span>' : '<span class="dim">no trade</span>';
+    const head = `<thead><tr><th>Coin</th><th class="num">Price</th>${keys.map(k => `<th>${esc(k.charAt(0).toUpperCase() + k.slice(1))}</th>`).join('')}<th>Action</th><th>Checked</th></tr></thead>`;
+    const body = rows.map(({ mk, d }) => {
+      const a = parseAnswers(d.answers);
+      return `<tr><td class="nw"><b>${esc(mk.replace('-GBP', ''))}</b>${held.has(mk) ? ' <span class="badge buy" style="margin-left:4px">OWNED</span>' : ''}</td>
+        <td class="num">${esc(px(d.price))}</td>${keys.map(k => cell(k, a[k])).join('')}
+        <td class="nw">${badge((d.action || '').toUpperCase())}</td><td class="dim nw">${esc(fmtTime(d.time, { day: undefined, month: undefined }))}</td></tr>`;
+    }).join('');
+    const missing = snap.unavailable && snap.unavailable.length ? `<div class="sub" style="margin-top:8px">Skipped (not on Coinbase): ${esc(snap.unavailable.join(', '))}</div>` : '';
+    return `<section class="card section"><div class="head"><h2>Jev's latest read</h2><span class="sub">${rows.length} coins · coins you own first</span></div>
+      <div class="body"><div class="scroll"><table>${head}<tbody>${body || '<tr><td class="dim">No checks yet.</td></tr>'}</tbody></table></div>${missing}</div></section>`;
+  }
+
+  // ---------- tables ----------
+  function positionsTable(ps) {
+    if (!ps.length) return '<div class="empty" style="padding:16px 0">No open trades right now.</div>';
+    return `<div class="scroll"><table><thead><tr><th>Market</th><th class="num">Bought at</th><th class="num">Now</th><th class="num">Value</th><th class="num">Profit / loss</th><th class="num">Stop</th><th class="num">Target</th><th>Since</th></tr></thead><tbody>
+      ${ps.map(p => `<tr><td class="nw">${esc(p.market)}</td><td class="num">${esc(px(p.entry_price))}</td><td class="num">${esc(px(p.price))}</td>
+        <td class="num">${esc(gbp.format(p.value))}</td><td class="num ${cls(p.pnl)}">${esc(signed(p.pnl))} (${esc(pct(p.pnl_pct))})</td>
+        <td class="num dim">${esc(px(p.stop_price))}</td><td class="num dim">${esc(px(p.target_price))}</td><td class="dim nw">${esc(fmtTime(p.entry_time))}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  }
+
+  function tradesTable(ts) {
+    if (!ts.length) return '<div class="empty" style="padding:16px 0">No trades yet. The bot only buys when every entry rule is met.</div>';
+    const all = ts.slice().reverse();
+    const head = `<thead><tr><th>When</th><th>Market</th><th>Side</th><th class="num">Price</th><th class="num">Amount</th><th class="num">Profit / loss</th><th>Why</th></tr></thead>`;
+    const row = t => { const pnl = t.pnl === '' ? null : +t.pnl; return `<tr><td class="dim nw">${esc(fmtTime(t.time))}</td><td class="nw">${esc(t.market)}</td>
+        <td><span class="badge ${t.side === 'BUY' ? 'buy' : 'sell'}">${esc(t.side)}</span></td>
+        <td class="num">${esc(px(t.fill_price))}</td><td class="num">${esc(gbp.format(+t.gbp))}</td>
+        <td class="num ${pnl == null ? '' : cls(pnl)}">${pnl == null ? '—' : esc(signed(pnl))}</td><td class="reason">${esc(t.reason)}</td></tr>`; };
+    const first = all.slice(0, 10), rest = all.slice(10);
+    return `<div class="scroll"><table>${head}<tbody>${first.map(row).join('')}</tbody></table></div>` +
+      (rest.length ? `<details class="more"><summary>Show ${rest.length} older trades</summary><div class="scroll"><table>${head}<tbody>${rest.map(row).join('')}</tbody></table></div></details>` : '');
+  }
+
+  function decisionsTable(ds) {
+    if (!ds.length) return '<div class="empty" style="padding:16px 0">No checks yet.</div>';
+    const all = ds.slice().reverse();
+    const head = `<thead><tr><th>When</th><th>Market</th><th class="num">Price</th><th>Jev said</th><th>Action</th><th class="num">Time</th></tr></thead>`;
+    const row = d => `<tr><td class="dim nw">${esc(fmtTime(d.time))}</td><td class="nw">${esc(d.market)}</td><td class="num">${esc(px(d.price))}</td>
+        <td class="reason">${esc(d.answers || d.reason)}</td><td>${esc(d.action)}</td><td class="num dim">${d.jev_seconds ? (+d.jev_seconds).toFixed(1) + ' s' : '—'}</td></tr>`;
+    const first = all.slice(0, 8), rest = all.slice(8);
+    return `<div class="scroll"><table>${head}<tbody>${first.map(row).join('')}</tbody></table></div>` +
+      (rest.length ? `<details class="more"><summary>Show ${rest.length} earlier checks</summary><div class="scroll"><table>${head}<tbody>${rest.map(row).join('')}</tbody></table></div></details>` : '');
+  }
+
+  // ---------- main render ----------
+  function render(snap) {
+    state.snap = snap;
+    setStatus(snap);
+    const s = snap.summary || {};
+    const start = snap.starting_cash || 10000;
+    const eq = s.equity ?? start, ret = s.ret ?? 0, bench = s.bench ?? start, bret = s.bench_ret ?? 0;
+    const edge = ret - bret;
+    const closed = s.closed || 0;
+    const winRate = closed ? Math.round(s.wins / closed * 100) + '% won' : 'none closed yet';
+    const cr = snap.credits;
+    $('#subtitle').textContent = `Fake money only · ${(snap.markets || []).length > 4 ? (snap.markets.length + ' coins') : (snap.markets || []).join(', ')} · checks every ${snap.check_every_minutes || 15} min · decisions by Jev via ${snap.provider === 'vercel' ? 'Vercel AI Gateway' : 'TypeSafe'}${snap.runner === 'cloud' ? ' · runs in the cloud' : ''}`;
+
+    const reads = (snap.markets || []).length > 4 ? '' : (snap.markets || []).map(mk => readCard(mk, (snap.latest || {})[mk], snap)).join('');
+    const eqPts = snap.equity || [];
+
+    app.innerHTML = `
+      <section class="hero">
+        <div class="card hero-main">
+          <div class="label">Bot account value</div>
+          <div class="hero-value">${esc(gbp.format(eq))}</div>
+          <div class="delta ${ret > 0 ? 'up' : ret < 0 ? 'down' : 'flat'}">${ret > 0 ? '▲' : ret < 0 ? '▼' : '●'} ${esc(pct(ret))} since start (${esc(gbp0.format(start))})</div>
+        </div>
+        <div class="tiles">
+          <div class="card tile"><div class="label">Buy-and-hold instead</div><div class="value">${esc(gbp.format(bench))}</div><div class="note">${esc(pct(bret))} &middot; bot is <b class="${cls(edge)}">${esc((edge >= 0 ? '+' : '−') + Math.abs(edge).toFixed(2))} pts</b> vs this</div></div>
+          <div class="card tile"><div class="label">Closed trades</div><div class="value">${num.format(closed)}</div><div class="note">${esc(winRate)}${(snap.positions || []).length ? ' &middot; ' + snap.positions.length + ' open' : ''}</div></div>
+          <div class="card tile"><div class="label">Worst drop</div><div class="value">${esc('−' + (s.dd || 0).toFixed(2) + '%')}</div><div class="note">buy-and-hold: −${esc((s.bench_dd || 0).toFixed(2))}%</div></div>
+          <div class="card tile"><div class="label">Fees paid (simulated)</div><div class="value">${esc(gbp.format(snap.fees_paid || 0))}</div><div class="note">${esc(snap.risk ? snap.risk.fee_pct + '% per buy or sell' : '')}</div></div>
+        </div>
+      </section>
+
+      ${s.verdict ? verdictBlock(s) : ''}
+
+      <section class="grid-2">
+        <div class="card">
+          <div class="head"><h2>Account value</h2><span class="sub">bot vs simply buying and holding</span>
+            <div class="legend"><span class="key"><i class="swatch" style="background:var(--series-1)"></i>Bot</span><span class="key"><i class="swatch" style="background:var(--series-2)"></i>Buy &amp; hold</span></div></div>
+          <div class="body"><div class="chart-box" id="chart"></div>
+            ${eqPts.length ? `<details><summary>Show as table</summary><div class="scroll"><table><thead><tr><th>When</th><th class="num">Bot</th><th class="num">Buy &amp; hold</th></tr></thead><tbody>
+              ${eqPts.slice().reverse().slice(0, 48).map(p => `<tr><td class="dim">${esc(fmtTime(p[0]))}</td><td class="num">${esc(gbp.format(p[1]))}</td><td class="num">${esc(gbp.format(p[2]))}</td></tr>`).join('')}
+            </tbody></table></div></details>` : ''}
+          </div>
+        </div>
+        <div class="stack">
+          <div class="card"><div class="head"><h2>Jev &amp; Vercel</h2></div><div class="body"><dl class="kv">
+            <dt>Jev checks</dt><dd>${num.format(s.checks || 0)}</dd>
+            <dt>Errors</dt><dd>${num.format(s.errors || 0)}</dd>
+            ${s.retries != null ? `<dt>Retries (Jev busy)</dt><dd>${num.format(s.retries)}</dd>` : ''}
+            <dt>Average answer time</dt><dd>${((s.avg_secs || 0)).toFixed(2)} s</dd>
+            <dt>Tokens used</dt><dd>${num.format(s.tokens || 0)}</dd>
+            <dt>Jev cost logged</dt><dd>${esc(usd(s.cost || 0, 4))}</dd>
+            ${cr ? `<dt>AI Gateway credit left</dt><dd>${esc(usd(cr.balance))}</dd><dt>AI Gateway used to date</dt><dd>${esc(usd(cr.total_used))}</dd>` : '<dt>AI Gateway balance</dt><dd class="dim">not reported</dd>'}
+          </dl></div></div>
+          <div class="card"><div class="head"><h2>Cash</h2></div><div class="body"><dl class="kv">
+            <dt>Cash</dt><dd>${esc(gbp.format(snap.cash ?? 0))}</dd>
+            <dt>In open trades</dt><dd>${esc(gbp.format(Math.max(0, Math.round(((eq) - (snap.cash ?? 0)) * 100) / 100)))}</dd>
+          </dl></div></div>
+        </div>
+      </section>
+
+      ${(snap.markets || []).length > 4 ? readsTable(snap) : `<h2 style="font-size:14px;margin:4px 0 10px">Jev's latest read</h2>
+      <section class="reads">${reads || '<div class="card read"><div class="empty">No checks yet.</div></div>'}</section>`}
+
+      <section class="card section"><div class="head"><h2>Open trades</h2></div><div class="body">${positionsTable(snap.positions || [])}</div></section>
+      <section class="card section"><div class="head"><h2>Trade history</h2><span class="sub">latest first</span></div><div class="body">${tradesTable(snap.trades || [])}</div></section>
+
+      <section class="grid-2">
+        <div class="card"><div class="head"><h2>Recent checks</h2><span class="sub">every answer Jev gave, latest first</span></div><div class="body">${decisionsTable(snap.decisions || [])}</div></div>
+        <div class="stack">
+          <div class="card"><div class="head"><h2>Your rules</h2></div><div class="body">
+            <div class="rules-h">Buy when all are true</div><ul class="rules">${(snap.rules?.entry || []).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
+            <div class="rules-h">Sell when any is true</div><ul class="rules">${(snap.rules?.exit || []).map(r => `<li>${esc(r)}</li>`).join('')}
+              ${snap.risk ? `<li>price falls ${snap.risk.stop_loss_pct}% (stop-loss)</li><li>price rises ${snap.risk.take_profit_pct}% (take-profit)</li>` : ''}</ul>
+            ${snap.risk ? `<div class="rules-h">Safety limits</div><ul class="rules">
+              <li>${snap.risk.position_size_pct}% of the account per trade</li>
+              <li>no new trades after a ${snap.risk.daily_loss_limit_pct}% loss in a day</li>
+              <li>${snap.risk.cooldown_minutes} min wait before re-buying a market</li>
+              <li>simulated slippage ${snap.risk.slippage_pct}% on ${esc((snap.risk.major_markets || []).map(m => m.replace('-GBP', '')).join(' & ') || 'all coins')}${snap.risk.slippage_pct_other != null && (snap.risk.major_markets || []).length ? `, ${snap.risk.slippage_pct_other}% on the rest` : ''}</li></ul>` : ''}
+          </div></div>
+          ${(snap.events || []).length ? `<div class="card"><div class="head"><h2>Warnings</h2></div><div class="body"><ul class="events" style="list-style:none;padding:0;margin:0">
+            ${snap.events.slice().reverse().slice(0, 8).map(e => `<li>${e.level === 'ERROR' ? icon.bad : icon.warn}<span class="lvl">${esc(e.level)}</span>${esc(fmtTime(e.time))} &middot; ${esc(e.message)}</li>`).join('').replace(/class="icon"/g, 'class="icon" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"')}
+          </ul></div></div>` : ''}
+        </div>
+      </section>`;
+
+    drawChart($('#chart'), eqPts, start);
+  }
+
+  function notice(title, text) {
+    app.innerHTML = `<div class="card notice"><h2>${esc(title)}</h2><div class="sub">${esc(text)}</div></div>`;
+  }
+
+  async function load() {
+    try {
+      const r = await fetch('/api/data', { cache: 'no-store' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { setStatus(null); notice('Dashboard not ready', d.error || 'The data store is not reachable yet.'); return; }
+      if (d.empty) { setStatus(null); notice('Waiting for the bot', 'No data has arrived yet. It appears after the bot’s next check (every 15 minutes).'); return; }
+      render(d);
+    } catch (e) {
+      if (!state.snap) notice('Could not load', 'Check your connection and refresh.');
+    }
+  }
+
+  let resizeT;
+  window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => state.snap && drawChart($('#chart'), state.snap.equity || [], state.snap.starting_cash || 10000), 150); });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => state.snap && render(state.snap));
+  setInterval(load, 60000);
+  setInterval(() => state.snap && setStatus(state.snap), 20000);
+  load();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+name: Wake the Jev bot
+
+on:
+  schedule:
+    - cron: '4,19,34,49 * * * *'   # every 15 minutes (off the busy :00 mark)
+    - cron: '11 3 1 * *'           # monthly keep-alive (see below)
+  workflow_dispatch: {}            # "Run workflow" button for a manual round
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wake-bot
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    if: github.event.schedule != '11 3 1 * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Run one trading round
+        # The bot lives on Vercel; this only knocks on its door. It ignores knocks
+        # less than 10 minutes apart, so a late or duplicate run can't double-trade.
+        run: |
+          curl -sS --max-time 320 --retry 2 --retry-delay 20 \
+            -w '\nHTTP %{http_code}\n' \
+            https://jev-paper-trader-dashboard.vercel.app/api/tick
+
+  keepalive:
+    # GitHub switches off schedules in repos with no activity for 60 days.
+    # A tiny monthly commit stops that happening.
+    if: github.event.schedule == '11 3 1 * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          date -u +%Y-%m-%dT%H:%M:%SZ > .keepalive
+          git config user.name "jev-bot-clock"
+          git config user.email "jev-bot-clock@users.noreply.github.com"
+          git add .keepalive
+          git commit -m "keep-alive" && git push
