@@ -6,6 +6,7 @@ import { CONFIG, RULES } from './_lib/settings.js';
 import { runCycle, snapshot, newState, iso } from './_lib/engine.js';
 import { gatewayToken } from './_lib/jev.js';
 import SEED from './_lib/seed.js';
+import { waitUntil } from '@vercel/functions';
 
 export const config = { maxDuration: 300 };
 
@@ -46,13 +47,24 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, skipped: 'another round claimed this slot', detail: String(e.message || e).slice(0, 200) });
     }
 
-    const token = await gatewayToken();
-    const result = await runCycle(st, CONFIG, RULES, { token, startedAt: started });
-    st.last_cycle_at = iso();
-    st.running_until = null;
+    const round = async () => {
+      const token = await gatewayToken();
+      const result = await runCycle(st, CONFIG, RULES, { token, startedAt: started });
+      st.last_cycle_at = iso();
+      st.running_until = null;
+      await writeJson('state.json', st, claim?.etag ? { ifMatch: claim.etag } : {});
+      await writeJson('snapshot.json', snapshot(st, CONFIG, RULES, await credits(token)));
+      return result;
+    };
 
-    await writeJson('state.json', st, claim?.etag ? { ifMatch: claim.etag } : {});
-    await writeJson('snapshot.json', snapshot(st, CONFIG, RULES, await credits(token)));
+    // Default: answer at once and finish the round in the background, because wake-up
+    // services (cron-job.org) give up after 30 seconds and a round takes 2-3 minutes.
+    // Add ?wait=1 to wait for the full result instead.
+    if (req.query?.wait !== '1') {
+      waitUntil(round().catch(e => console.error('background round failed', e)));
+      return res.status(202).json({ ok: true, started: true });
+    }
+    const result = await round();
     return res.status(200).json({ ok: true, seconds: (Date.now() - started) / 1000, ...result });
   } catch (e) {
     if (e instanceof StoreNotConnected) return res.status(503).json({ error: e.message });
