@@ -27,6 +27,12 @@ export default async function handler(req, res) {
   try {
     let { data: st, etag } = await readJsonTagged('state.json');
     if (!st) st = SEED ? structuredClone(SEED) : newState(CONFIG);
+    // fresh session: archive the old paper accounts and start again from the starting cash
+    if (CONFIG.session_id && st.session_id !== CONFIG.session_id) {
+      await writeJson(`archive/${st.session_id || 'first-session'}.json`, st);
+      st = newState(CONFIG);
+      st.events.push({ time: iso(), level: 'INFO', message: 'fresh paper-trading session started - previous session archived' });
+    }
 
     const now = Date.now();
     const sinceMin = st.last_cycle_at ? (now - Date.parse(st.last_cycle_at)) / 60000 : Infinity;

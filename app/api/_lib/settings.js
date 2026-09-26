@@ -5,6 +5,7 @@ export const CONFIG = {
     'SHIB-GBP', 'UNI-GBP', 'ATOM-GBP', 'BCH-GBP', 'AAVE-GBP', 'ALGO-GBP', 'ETC-GBP', 'FIL-GBP',
     'CRV-GBP', 'XTZ-GBP', 'SNX-GBP', 'CHZ-GBP',
   ],
+  session_id: 'fresh-2026-09-26',   // change this to wipe the paper accounts and start again (old data is archived)
   starting_cash_gbp: 10000,
   check_every_minutes: 10,
   min_gap_minutes: 7,          // ignore wake-ups closer together than this

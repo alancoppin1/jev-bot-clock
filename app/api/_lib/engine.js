@@ -13,7 +13,7 @@ const KEEP = { decisions: 200, events: 300, trades: 5000, equity: 20000, compare
 
 export function newState(cfg) {
   return {
-    version: 1, runner: 'cloud', created: iso(), starting_cash: cfg.starting_cash_gbp, cash: cfg.starting_cash_gbp,
+    version: 1, runner: 'cloud', session_id: cfg.session_id || null, created: iso(), starting_cash: cfg.starting_cash_gbp, cash: cfg.starting_cash_gbp,
     positions: {}, benchmark_start: {}, last_exit: {}, day: '', day_start_equity: 0, fees_paid: 0,
     unavailable: [], last_cycle_at: null, running_until: null,
     stats: { checks: 0, errors: 0, tokens: 0, secs: 0, cost: 0, costed: 0, retries: 0 },
@@ -223,7 +223,8 @@ export async function runCycle(st, cfg, rules, { token, deps = {}, startedAt = D
     }
     if (!st.variants) {
       st.variants = Object.fromEntries(Object.keys(VARIANTS).map(id => [id, newAccount(st.starting_cash, now())]));
-      st.compare_base = { time: now(), a: eq, hold: bench };
+      // every line starts from the same pre-trade £ amount, so each pays its own opening fees (hold pays one buying fee)
+      st.compare_base = { time: now(), a: eqNow, hold: bench / (1 - cfg.fee_pct / 100) };
       event('INFO', `started side-by-side test: A vs ${Object.keys(VARIANTS).join(' vs ')}`);
     }
     const vEq = {};
