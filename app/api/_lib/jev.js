@@ -35,7 +35,11 @@ export async function askJev({ url, model, token, state, questions, retries = 5,
       if (cost != null) usage.cost_usd = parseFloat(cost);
       return { answers: d.answers || {}, usage, secs, attempts: attempt + 1 };
     }
-    if (r.status === 401 || r.status === 403) throw new JevError(`AI Gateway refused access (HTTP ${r.status})`);
+    if (r.status === 401 || r.status === 403) {
+      const why = await r.text().catch(() => '');
+      const e = new JevError(`AI Gateway refused access (HTTP ${r.status})${why ? ': ' + why.replace(/\s+/g, ' ').slice(0, 160) : ''}`);
+      e.refused = true; throw e;
+    }
     if (r.status === 402) throw new JevError('Out of AI Gateway credit (HTTP 402)');
     let msg = '';
     try { const j = await r.json(); msg = j.message || j.error?.message || JSON.stringify(j); } catch { msg = await r.text().catch(() => ''); }

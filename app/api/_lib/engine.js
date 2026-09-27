@@ -149,7 +149,9 @@ export async function runCycle(st, cfg, rules, { token, deps = {}, startedAt = D
         push('decisions', { ...base, answers: '', action: 'NONE', reason: `Skipped: ${rep.error}`, jev_seconds: '', input_tokens: '', output_tokens: '', cost_usd: '' });
       } else {
         st.stats.errors++;
-        event('ERROR', `${m}: ${rep.error} - no action taken`);
+        const sameAsLast = st.events.at(-1)?.level === 'ERROR' && st.events.at(-1).message.endsWith(`${rep.error} - no action taken`) && st.events.at(-1).time === now();
+        if (sameAsLast) st.events.at(-1).message = st.events.at(-1).message.replace(/^(\S+?)(?: \+ (\d+) more)?:/, (x, first, n) => `${first} + ${(+n || 0) + 1} more:`);
+        else event('ERROR', `${m}: ${rep.error} - no action taken`);
         push('decisions', { ...base, answers: '', action: 'NONE', reason: `Jev error: ${rep.error}`, jev_seconds: '', input_tokens: '', output_tokens: '', cost_usd: '' });
       }
       continue;

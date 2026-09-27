@@ -59,8 +59,10 @@ export default async function handler(req, res) {
       }
     }
 
+    // Get the AI Gateway pass now, while this request is still open. Once we've replied, Vercel's
+    // per-request pass may no longer be reachable and an older one can be picked up instead.
+    const token = await gatewayToken();
     const round = async () => {
-      const token = await gatewayToken();
       const result = await runCycle(st, CONFIG, RULES, { token, startedAt: started });
       st.last_cycle_at = iso();
       st.running_until = null;
