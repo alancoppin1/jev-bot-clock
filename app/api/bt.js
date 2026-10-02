@@ -185,6 +185,11 @@ export default async function handler(req, res) {
       for (let i = 0; i < flat.length; i += 2) ans[flat[i]] = flat[i + 1];
       return res.status(200).json({ id: a.id, kind: a.kind, bars, ans });
     }
+    if (q.op === 'reset') {   // forget an asset's prices and answers so it is collected again
+      const ids = String(q.asset || '').split(',').filter(id => ASSETS.some(x => x.id === id));
+      for (const id of ids) { await redisCmd(['DEL', 'bt:c:' + id, 'bt:a:' + id]); await redisCmd(['SREM', 'bt:done', id]); }
+      return res.status(200).json({ reset: ids });
+    }
     if (q.op === 'assets') return res.status(200).json(ASSETS);
     return res.status(400).json({ error: 'op must be probe, step, status, dump or assets' });
   } catch (e) {
