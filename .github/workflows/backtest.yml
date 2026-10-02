@@ -38,4 +38,5 @@ jobs:
           git config user.name "jev-bot-clock"
           git config user.email "jev-bot-clock@users.noreply.github.com"
           git add backtest/data
-          git commit -m "Backtest data [skip ci]" && git push || echo "nothing to commit"
+          git commit -m "Backtest data [skip ci]" || { echo "nothing to commit"; exit 0; }
+          git pull --rebase origin main && git push
