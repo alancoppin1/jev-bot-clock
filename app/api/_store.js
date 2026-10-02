@@ -92,3 +92,4 @@ export async function releaseLock(name, token) {
 }
 
 export const storeName = () => (hasRedis() ? 'redis' : hasBlob() ? 'blob' : 'none');
+export { redis as redisCmd };
