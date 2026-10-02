@@ -1,0 +1,41 @@
+name: Collect backtest data
+
+on:
+  push:
+    paths: ['backtest/run.txt']
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backtest
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    env:
+      BASE: https://jev-paper-trader-dashboard.vercel.app/api/bt
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ask Jev about every past decision point
+        run: |
+          for n in $(seq 1 400); do
+            out=$(curl -sS --max-time 290 "$BASE?op=step&c=8" || echo '{}')
+            echo "$n $out"
+            [ "$(echo "$out" | jq -r '.done // false')" = "true" ] && break
+            sleep 2
+          done
+      - name: Save prices and Jev's answers to the repo
+        run: |
+          mkdir -p backtest/data
+          for a in $(curl -sS "$BASE?op=assets" | jq -r '.[].id'); do
+            curl -sS --max-time 120 --retry 3 "$BASE?op=dump&asset=$a" -o "backtest/data/$a.json"
+          done
+          ls -la backtest/data | head -50
+          git config user.name "jev-bot-clock"
+          git config user.email "jev-bot-clock@users.noreply.github.com"
+          git add backtest/data
+          git commit -m "Backtest data [skip ci]" && git push || echo "nothing to commit"

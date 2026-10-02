@@ -74,16 +74,16 @@ async function loadBars(a) {
   const raw = await redisCmd(['GET', 'bt:c:' + a.id]);
   if (raw) return JSON.parse(raw);
   let bars;
-  if (a.kind === 'crypto') bars = await coinbaseHourly(a.id);
-  else { try { bars = await yahoo(a.id); } catch (e) { bars = await stooq(a.id); } bars = bars.slice(-640); }
+  if (a.kind === 'crypto') bars = await coinbaseHourly(a.id, 8800);
+  else { try { bars = await yahoo(a.id); } catch (e) { bars = await stooq(a.id); } }
   await redisCmd(['SET', 'bt:c:' + a.id, JSON.stringify(bars)]);
   return bars;
 }
 
-// decision points: every day for shares (last ~2 years); every 4th hour for crypto (last ~6 months)
+// decision points: every day for shares (~4.5 years); every 4th hour for crypto (~1 year)
 function samples(a, bars) {
   const out = [];
-  if (a.kind === 'stock') for (let i = Math.max(110, bars.length - 504); i < bars.length; i++) out.push(i);
+  if (a.kind === 'stock') for (let i = 110; i < bars.length; i++) out.push(i);
   if (a.kind === 'crypto') for (let i = 110; i < bars.length; i++) if (Math.floor(bars[i][0] / 3600) % 4 === 0) out.push(i);
   return out;
 }
