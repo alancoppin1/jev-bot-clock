@@ -4,7 +4,10 @@
 // The crypto bot that used to run here was retired on 2026-10-17; its final results are kept in archive/.
 import { readJson, readJsonTagged, writeJson, StoreNotConnected, acquireLock, releaseLock } from './_store.js';
 import { STOCK_CONFIG as CFG } from './_lib/stocks/settings.js';
-import { runRound, snapshot, newState, iso } from './_lib/stocks/engine.js';
+import { runRound, snapshot, newState, iso, buildEventState } from './_lib/stocks/engine.js';
+import { NEWS_QUESTIONS } from './_lib/stocks/settings.js';
+import { filingText, fetchPrices, priceAt } from './_lib/stocks/sources.js';
+import { askJev } from './_lib/jev.js';
 import { gatewayToken } from './_lib/jev.js';
 import { waitUntil } from '@vercel/functions';
 
@@ -37,6 +40,20 @@ export default async function handler(req, res) {
       if (st) await writeJson(`archive/${st.session_id}.json`, st);
       else await archiveCrypto();
       st = newState(CFG); etag = null;
+    }
+
+    // ?probe=jev: ask Jev about the first waiting news item without trading (a connection test; once per 10 minutes)
+    if (req.query?.probe === 'jev') {
+      const ev = st.queue[0];
+      if (!ev) return res.status(200).json({ ok: true, probe: 'nothing waiting' });
+      if ((await acquireLock('probe', 600)) === false) return res.status(429).json({ error: 'probe used recently' });
+      const P = await fetchPrices([ev.ticker, 'SPY']);
+      const before = priceAt(P[ev.ticker], ev.time), sb = priceAt(P.SPY, ev.time);
+      const ctx = { now: Date.now(), price: P[ev.ticker].price, before, reaction: (P[ev.ticker].price / before - 1) * 100, market: (P.SPY.price / sb - 1) * 100 };
+      if (ev.kind === 'filing') Object.assign(ctx, await filingText(ev, CFG.sec_user_agent, CFG.filing_text_chars));
+      const state = buildEventState(ev, ctx);
+      const rep = await askJev({ url: CFG.jev_url, model: CFG.jev_model, token: await gatewayToken(), state, questions: NEWS_QUESTIONS, retries: 3 });
+      return res.status(200).json({ ok: true, probe: ev.title, state_chars: state.length, answers: rep.answers, usage: rep.usage, secs: rep.secs });
     }
 
     const now = Date.now();

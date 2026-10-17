@@ -377,7 +377,7 @@ export function snapshot(st, cfg, credits = null) {
   const lines = [...Object.entries(ACCOUNTS).map(([id, m]) => acct(id, st.accounts[id], m))];
   const bench = st.bench ? Object.entries(BENCH).map(([id, m]) => { const eq = value(st.bench[id], prices, fx); return { id, name: m.name, desc: m.desc, equity: r2(eq), ret: r2(pct(eq, cfg.starting_cash_gbp)) }; }) : [];
   let verdict;
-  if (!st.started) verdict = 'Waiting for the US market to open (Monday 14:30 UK time). The experiment starts on the first open round.';
+  if (!st.started) verdict = 'Waiting for the US market to open. The experiment starts on the first round after the opening bell; news found before then is queued.';
   else if (aSells < MIN_TRADES || days < MIN_DAYS) verdict = `TOO EARLY TO JUDGE. A needs at least ${MIN_TRADES} closed trades and ${MIN_DAYS} days (it has ${aSells} over ${Math.floor(days)} days). Until then, results are mostly luck.`;
   else {
     const aRet = lines[0].ret, cRet = lines[2].ret, hRet = bench[0]?.ret ?? 0, sRet = bench[1]?.ret ?? 0;
