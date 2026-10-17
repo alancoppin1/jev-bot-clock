@@ -41,7 +41,7 @@ async function blobRead(pathname) {
     meta = await head(pathname);
     r = await get(pathname, { access: 'private', useCache: false });
   } catch (e) {
-    if (e && e.name === 'BlobNotFoundError') return { data: null, etag: null };
+    if (e && (e.name === 'BlobNotFoundError' || /does not exist|not found/i.test(e.message || ''))) return { data: null, etag: null };
     throw e;
   }
   if (!r || r.statusCode !== 200 || !r.stream) return { data: null, etag: null };
