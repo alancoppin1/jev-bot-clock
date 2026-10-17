@@ -1,80 +1,64 @@
-// One trading round in the cloud. Called every 15 minutes by the GitHub scheduler
-// (plus a daily Vercel cron as a backstop). Safe to call any time: it runs at most
-// one round per 10 minutes, and two overlapping calls can't both trade.
-import { readJsonTagged, writeJson, StoreNotConnected, acquireLock, releaseLock } from './_store.js';
-import { CONFIG, RULES } from './_lib/settings.js';
-import { runCycle, snapshot, newState, iso } from './_lib/engine.js';
+// One round of the US stock news experiment. Called every 10-15 minutes by cron-job.org
+// (plus a daily Vercel cron as a backstop). Safe to call any time: it runs at most one round
+// per 7 minutes, and two overlapping calls can't both trade.
+// The crypto bot that used to run here was retired on 2026-10-17; its final results are kept in archive/.
+import { readJson, readJsonTagged, writeJson, StoreNotConnected, acquireLock, releaseLock } from './_store.js';
+import { STOCK_CONFIG as CFG } from './_lib/stocks/settings.js';
+import { runRound, snapshot, newState, iso } from './_lib/stocks/engine.js';
 import { gatewayToken } from './_lib/jev.js';
-import SEED from './_lib/seed.js';
 import { waitUntil } from '@vercel/functions';
 
 export const config = { maxDuration: 300 };
+const STATE = 'stocks/state.json';
 
 async function credits(token) {
   try {
-    const r = await fetch('https://ai-gateway.vercel.sh/v1/credits', {
-      headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(8000),
-    });
+    const r = await fetch('https://ai-gateway.vercel.sh/v1/credits', { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(8000) });
     if (!r.ok) return null;
     const d = await r.json();
     return { balance: parseFloat(d.balance), total_used: parseFloat(d.total_used) };
   } catch { return null; }
 }
 
+// keep the crypto bot's final state and dashboard data before the stock bot takes over the dashboard
+async function archiveCrypto() {
+  if (await readJson('archive/crypto-final-snapshot.json')) return;
+  const [cs, cp] = await Promise.all([readJson('state.json'), readJson('snapshot.json')]);
+  if (cs) await writeJson('archive/crypto-final-state.json', cs);
+  if (cp && cp.schema !== 2) await writeJson('archive/crypto-final-snapshot.json', { ...cp, retired_at: iso() });
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   const started = Date.now();
   try {
-    let { data: st, etag } = await readJsonTagged('state.json');
-    if (!st) st = SEED ? structuredClone(SEED) : newState(CONFIG);
-    // fresh session: archive the old paper accounts and start again from the starting cash
-    if (CONFIG.session_id && st.session_id !== CONFIG.session_id) {
-      await writeJson(`archive/${st.session_id || 'first-session'}.json`, st);
-      st = newState(CONFIG);
-      st.events.push({ time: iso(), level: 'INFO', message: 'fresh paper-trading session started - previous session archived' });
+    let { data: st, etag } = await readJsonTagged(STATE);
+    if (!st || st.session_id !== CFG.session_id) {
+      if (st) await writeJson(`archive/${st.session_id}.json`, st);
+      else await archiveCrypto();
+      st = newState(CFG); etag = null;
     }
 
     const now = Date.now();
     const sinceMin = st.last_cycle_at ? (now - Date.parse(st.last_cycle_at)) / 60000 : Infinity;
-    if (sinceMin < CONFIG.min_gap_minutes) {
-      return res.status(200).json({ ok: true, skipped: 'ran recently', minutes_since_last: Math.round(sinceMin * 10) / 10 });
-    }
-    if (st.running_until && Date.parse(st.running_until) > now) {
-      return res.status(200).json({ ok: true, skipped: 'another round is in progress' });
-    }
+    if (sinceMin < CFG.min_gap_minutes) return res.status(200).json({ ok: true, skipped: 'ran recently', minutes_since_last: Math.round(sinceMin * 10) / 10 });
 
-    // claim the round (fails if another call claimed it first)
-    let claim, lock = await acquireLock('round', 290);
+    const lock = await acquireLock('stock-round', 290);
     if (lock === false) return res.status(200).json({ ok: true, skipped: 'another round is in progress' });
-    if (lock && etag) {
-      claim = { etag };                         // Redis: a small lock key instead of re-saving the whole state
-    } else {
-      st.running_until = iso(new Date(now + 280 * 1000));
-      try {
-        claim = await writeJson('state.json', st, etag ? { ifMatch: etag } : { overwrite: false });
-      } catch (e) {
-        await releaseLock('round', lock);
-        console.error('claim failed', e);
-        return res.status(200).json({ ok: true, skipped: 'another round claimed this slot', detail: String(e.message || e).slice(0, 200) });
-      }
-    }
 
-    // Get the AI Gateway pass now, while this request is still open. Once we've replied, Vercel's
-    // per-request pass may no longer be reachable and an older one can be picked up instead.
-    const token = await gatewayToken();
+    const token = await gatewayToken();    // fetch while the request is still open
     const round = async () => {
-      const result = await runCycle(st, CONFIG, RULES, { token, startedAt: started });
-      st.last_cycle_at = iso();
-      st.running_until = null;
-      await writeJson('state.json', st, claim?.etag ? { ifMatch: claim.etag } : {});
-      await writeJson('snapshot.json', snapshot(st, CONFIG, RULES, await credits(token)));
-      await releaseLock('round', lock);
-      return result;
+      try {
+        const result = await runRound(st, CFG, { token, startedAt: started });
+        st.last_cycle_at = iso();
+        await writeJson(STATE, st, etag ? { ifMatch: etag } : {});
+        await writeJson('snapshot.json', snapshot(st, CFG, await credits(token)));
+        return result;
+      } finally { await releaseLock('stock-round', lock); }
     };
 
-    // Default: answer at once and finish the round in the background, because wake-up
-    // services (cron-job.org) give up after 30 seconds and a round takes 2-3 minutes.
-    // Add ?wait=1 to wait for the full result instead.
+    // Default: answer at once and finish in the background (wake-up services give up after 30 seconds).
+    // Add ?wait=1 to wait for the full result.
     if (req.query?.wait !== '1') {
       waitUntil(round().catch(e => console.error('background round failed', e)));
       return res.status(202).json({ ok: true, started: true });

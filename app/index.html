@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Jev Paper Trader</title>
-<meta name="description" content="Live dashboard for Alan's Jev paper-trading bot - fake money only.">
+<title>Jev Stock Trader</title>
+<meta name="description" content="Live dashboard for Alan's Jev stock news paper-trading test - fake money only.">
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -206,21 +206,39 @@ footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-t
   .tile .value { font-size: 18px; }
   .qa { grid-template-columns: 96px 1fr; }
 }
+
+/* stock dashboard additions */
+a { color: var(--series-1); }
+.small { font-size: 12px; }
+.dim { color: var(--text-secondary); }
+.key { display: inline-flex; align-items: center; gap: 8px; }
+.key .swatch { width: 14px; height: 3px; border-radius: 2px; flex: none; }
+.tabs { display: inline-flex; gap: 4px; }
+.tab { border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); border-radius: 8px; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.tab.on { background: var(--surface-2); color: var(--text-primary); font-weight: 600; }
+.jev { display: grid; grid-template-columns: 64px minmax(110px, 1fr); gap: 3px 8px; font-size: 12px; align-items: center; min-width: 190px; }
+.jev .q { color: var(--text-secondary); }
+ul.hl { margin: 4px 0 0; padding-left: 16px; font-size: 12px; }
+ul.hl li { margin: 2px 0; }
+.reason { color: var(--text-secondary); font-size: 12px; margin-top: 4px; }
+.show-m { display: none; }
+@media (max-width: 600px) { .desc, .hide-m { display: none; } .show-m { display: block; } }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header class="top">
     <div>
-      <h1>Jev Paper Trader</h1>
-      <div class="sub" id="subtitle">Fake money only &middot; decisions by Jev</div>
+      <h1>Jev Stock News Trader</h1>
+      <div class="sub" id="subtitle">40 large US shares &middot; Jev reads the news &middot; fake money only &middot; <a href="/crypto.html">crypto bot results</a></div>
     </div>
     <div class="spacer"></div>
+    <span class="pill" id="market"><span class="dot"></span><span id="market-text">Market</span></span>
     <span class="pill" id="status"><span class="dot"></span><span id="status-text">Loading&hellip;</span></span>
     <button class="theme" id="theme" type="button" aria-label="Switch light or dark">Theme</button>
   </header>
   <main id="app"></main>
-  <footer>Paper trading only &mdash; no real money is used and nothing here is investment advice. The page refreshes itself every minute.</footer>
+  <footer>Paper trading only &mdash; no real money is used and nothing here is investment advice. Times are UK time. The page refreshes itself every minute.</footer>
 </div>
 
 <script>
@@ -230,25 +248,21 @@ footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-t
   const TZ = 'Europe/London';
   const gbp = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
   const gbp0 = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 });
-  const usd = (v, d = 2) => '$' + Number(v).toFixed(d);
-  // Coin prices: pounds and pence for normal prices, more digits for sub-penny coins.
-  const px = (v) => { v = +v; if (!isFinite(v)) return '\u2014'; if (Math.abs(v) >= 1) return gbp.format(v); return '\u00a3' + Number(v.toPrecision(4)).toString(); };
-  const num = new Intl.NumberFormat('en-GB');
+  const usd = (v) => '$' + Number(v).toFixed(2);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const pct = (v, d = 2) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(d) + '%';
+  const pct = (v, d = 2) => (v == null || !isFinite(v)) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(d) + '%';
   const signed = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + gbp.format(Math.abs(v));
   const cls = (v) => v > 0 ? 'pos' : v < 0 ? 'neg' : '';
-  const toDate = (iso) => new Date(iso);
-  const fmtTime = (iso, opts = {}) => new Intl.DateTimeFormat('en-GB', { timeZone: TZ, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', ...opts }).format(toDate(iso));
+  const fmtTime = (iso, opts = {}) => new Intl.DateTimeFormat('en-GB', { timeZone: TZ, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', ...opts }).format(new Date(iso));
   const ago = (iso) => {
-    const s = Math.max(0, (Date.now() - toDate(iso)) / 1000);
+    const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
     if (s < 90) return 'just now';
     if (s < 3600) return Math.round(s / 60) + ' min ago';
     if (s < 86400) return Math.round(s / 3600) + ' h ago';
     return Math.round(s / 86400) + ' days ago';
   };
+  const SERIES = { A: 'var(--series-1)', B: 'var(--series-2)', C: 'var(--series-3)', H: 'var(--series-4)', S: 'var(--series-5)' };
 
-  // ---------- theme toggle (per viewer, optional storage) ----------
   const themeBtn = $('#theme');
   const applyTheme = (t) => { if (t) document.documentElement.setAttribute('data-theme', t); else document.documentElement.removeAttribute('data-theme'); };
   try { applyTheme(localStorage.getItem('jev-theme')); } catch {}
@@ -259,447 +273,190 @@ footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-t
     try { localStorage.setItem('jev-theme', next); } catch {}
     if (state.snap) render(state.snap);
   });
+  const state = { snap: null, tab: 'A' };
 
-  const state = { snap: null };
-
-  // ---------- parse Jev's answers "trend=down@0.99 momentum=2.64@0.70 overextended=0.04" ----------
-  function parseAnswers(s) {
-    const out = {};
-    (s || '').split(/\s+/).filter(Boolean).forEach(tok => {
-      const m = tok.match(/^([^=]+)=([^@]+)(?:@([\d.]+))?$/);
-      if (m) out[m[1]] = { value: m[2], conf: m[3] !== undefined ? parseFloat(m[3]) : null };
-    });
-    return out;
-  }
-
-  // ---------- status pill ----------
   function setStatus(snap) {
     const pill = $('#status'), txt = $('#status-text');
     pill.classList.remove('live', 'stale', 'down');
     if (!snap || !snap.generated_at) { txt.textContent = 'Waiting for first update'; return; }
-    const ageMin = (Date.now() - toDate(snap.generated_at)) / 60000;
-    const limit = (snap.check_every_minutes || 15) * 2 + 3;
-    if (ageMin <= limit) { pill.classList.add('live'); txt.textContent = 'Live · updated ' + ago(snap.generated_at); }
-    else if (ageMin <= 180) { pill.classList.add('stale'); txt.textContent = 'Late · last update ' + ago(snap.generated_at); }
-    else { pill.classList.add('down'); txt.textContent = 'Not updating · last ' + ago(snap.generated_at); }
+    const ageMin = (Date.now() - new Date(snap.generated_at)) / 60000;
+    if (ageMin <= 35) { pill.classList.add('live'); txt.textContent = 'Updated ' + ago(snap.generated_at); }
+    else if (ageMin <= 180) { pill.classList.add('stale'); txt.textContent = 'Late · ' + ago(snap.generated_at); }
+    else { pill.classList.add('down'); txt.textContent = 'Not updating · ' + ago(snap.generated_at); }
+    const m = snap.market, mp = $('#market'), mt = $('#market-text');
+    mp.classList.remove('live', 'stale');
+    if (m && m.open) { mp.classList.add('live'); mt.textContent = 'US market open · closes ' + fmtTime(m.next_close, { weekday: undefined, day: undefined, month: undefined }); }
+    else if (m) { mt.textContent = 'US market closed · opens ' + fmtTime(m.next_open); }
+    else mt.textContent = 'US market';
   }
 
-  // ---------- icons ----------
   const icon = {
     info: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-5M12 8h.01"/></svg>',
     good: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--good)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg>',
     bad: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--critical)" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>',
-    warn: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--serious)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 17h.01"/></svg>',
   };
 
-  function verdictBlock(sum) {
-    const v = sum.verdict || '';
+  function verdictBlock(s) {
+    const v = s.verdict || '';
     let kind = 'info', title = 'Too early to judge';
-    if (v.startsWith('NOT WORKING')) { kind = 'bad'; title = 'Not beating buy-and-hold'; }
-    else if (v.startsWith('BEATING')) { kind = 'good'; title = 'Beating buy-and-hold on paper'; }
-    const body = v.replace(/^[A-Z \-]+\.\s*/, '');
-    const tradesPct = Math.min(100, (sum.closed || 0) / (sum.min_trades || 30) * 100);
-    const daysPct = Math.min(100, (sum.days || 0) / (sum.min_days || 60) * 100);
-    return `<div class="card verdict">
-      ${icon[kind]}
-      <div style="flex:1">
-        <div class="title">${esc(title)}</div>
-        <div class="text">${esc(body)}</div>
-        <div class="progress">
-          <div class="meter"><div class="meter-caption">Closed trades: ${sum.closed || 0} of ${sum.min_trades || 30}</div>
-            <div class="meter-track"><div class="meter-fill" style="width:${tradesPct}%"></div></div></div>
-          <div class="meter"><div class="meter-caption">Days tested: ${Math.floor(sum.days || 0)} of ${sum.min_days || 60}</div>
-            <div class="meter-track"><div class="meter-fill" style="width:${daysPct}%"></div></div></div>
-        </div>
-      </div></div>`;
+    if (!s.started) title = 'Starting at the next US market open';
+    else if (v.startsWith('NOT WORKING')) { kind = 'bad'; title = 'Jev is doing no better than random picks'; }
+    else if (v.startsWith('A IS AHEAD')) { kind = 'good'; title = 'Jev is ahead on paper'; }
+    else if (v.startsWith('A beats random')) { title = 'Better than random, worse than holding'; }
+    const body = v.replace(/^[A-Z][A-Z \-']+\.\s*/, '');
+    const A = s.accounts[0], closed = A.closed, days = Math.max(0, s.days || 0);
+    return `<div class="card verdict">${icon[kind]}<div style="flex:1">
+      <div class="title">${esc(title)}</div><div class="text">${esc(body)}</div>
+      ${s.started ? `<div class="progress">
+        <div class="meter"><div class="meter-caption">A's closed trades: ${closed} of 30</div><div class="meter-track"><div class="meter-fill" style="width:${Math.min(100, closed / 30 * 100)}%"></div></div></div>
+        <div class="meter"><div class="meter-caption">Days tested: ${Math.floor(days)} of 60</div><div class="meter-track"><div class="meter-fill" style="width:${Math.min(100, days / 60 * 100)}%"></div></div></div>
+      </div>` : ''}</div></div>`;
   }
 
-  // ---------- equity chart (hand-drawn SVG) ----------
+  // ---------- the race: five lines, all starting at £10,000 ----------
   function niceStep(range, target) {
     const raw = range / target, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
     return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
   }
-
-  function drawChart(box, pts, start) {
-    if (!pts || pts.length < 2) {
-      box.innerHTML = '<div class="empty">The chart appears once the bot has made its second check.</div>';
-      return;
-    }
+  function drawChart(box, s) {
+    const rows = s.series.rows, ids = s.series.ids;
+    if (!rows || rows.length < 2) { box.innerHTML = '<div class="empty">The chart starts once the US market has opened and the bot has run twice.</div>'; return; }
     const css = getComputedStyle(document.documentElement);
-    const c1 = css.getPropertyValue('--series-1').trim(), c2 = css.getPropertyValue('--series-2').trim();
-    const surf = css.getPropertyValue('--surface-1').trim();
-    const W = Math.max(320, box.clientWidth || 700), H = W < 520 ? 240 : 300;
-    const m = { l: 64, r: W < 520 ? 12 : 118, t: 12, b: 28 };
-    const iw = W - m.l - m.r, ih = H - m.t - m.b;
-    const ts = pts.map(p => toDate(p[0]).getTime());
-    const vals = pts.flatMap(p => [p[1], p[2]]).concat([start]);
-    let lo = Math.min(...vals), hi = Math.max(...vals);
-    const pad = Math.max((hi - lo) * 0.12, start * 0.002);
-    lo -= pad; hi += pad;
+    const col = (id) => css.getPropertyValue(SERIES[id].slice(4, -1)).trim();
+    const W = Math.max(300, Math.round(box.clientWidth || 760)), H = W < 500 ? 220 : 280, L = 56, R = 12, T = 12, B = 28;
+    const t0 = Date.parse(rows[0][0]), t1 = Date.parse(rows.at(-1)[0]);
+    let lo = Infinity, hi = -Infinity;
+    rows.forEach(r => ids.forEach((_, i) => { lo = Math.min(lo, r[1 + i]); hi = Math.max(hi, r[1 + i]); }));
+    lo = Math.min(lo, s.start_gbp); hi = Math.max(hi, s.start_gbp);
+    const pad = Math.max((hi - lo) * 0.08, 20); lo -= pad; hi += pad;
+    const x = (t) => L + (W - L - R) * (t1 > t0 ? (t - t0) / (t1 - t0) : 0), y = (v) => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
     const step = niceStep(hi - lo, 5);
-    lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
-    const t0 = ts[0], t1 = ts[ts.length - 1] === t0 ? t0 + 1 : ts[ts.length - 1];
-    const x = t => m.l + (t - t0) / (t1 - t0) * iw;
-    const y = v => m.t + (1 - (v - lo) / (hi - lo)) * ih;
-
     let g = '';
-    for (let v = lo; v <= hi + step / 2; v += step) {
-      g += `<line class="gridline" x1="${m.l}" x2="${m.l + iw}" y1="${y(v)}" y2="${y(v)}"/>`;
-      g += `<text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${esc(gbp0.format(v))}</text>`;
-    }
-    const nx = W < 520 ? 3 : 5, spanH = (t1 - t0) / 3.6e6;
-    for (let i = 0; i < nx; i++) {
-      const t = t0 + (t1 - t0) * i / (nx - 1);
-      const label = new Intl.DateTimeFormat('en-GB', spanH > 24 * 8 ? { timeZone: TZ, day: 'numeric', month: 'short' } : spanH > 20 ? { timeZone: TZ, weekday: 'short', hour: '2-digit', minute: '2-digit' } : { timeZone: TZ, hour: '2-digit', minute: '2-digit' }).format(new Date(t));
-      g += `<text x="${x(t)}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === nx - 1 ? 'end' : 'middle'}">${esc(label)}</text>`;
-    }
-    const path = k => pts.map((p, i) => (i ? 'L' : 'M') + x(ts[i]).toFixed(1) + ' ' + y(p[k]).toFixed(1)).join(' ');
-    const last = pts[pts.length - 1], lx = x(ts[ts.length - 1]);
-    const yb = y(last[1]), yh = y(last[2]);
-    let endLabels = '';
-    if (m.r > 60 && Math.abs(yb - yh) >= 16) {
-      endLabels = `<text x="${lx + 10}" y="${yb + 4}" style="fill:var(--text-primary);font-size:12px;font-weight:600">Bot ${esc(gbp0.format(last[1]))}</text>
-                   <text x="${lx + 10}" y="${yh + 4}" style="fill:var(--text-secondary);font-size:12px">Hold ${esc(gbp0.format(last[2]))}</text>`;
-    }
-    box.innerHTML = `
-      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Account value over time: bot versus buy-and-hold">
-        <g class="axis">${g}</g>
-        <line class="refline" x1="${m.l}" x2="${m.l + iw}" y1="${y(start)}" y2="${y(start)}"/>
-        <text x="${m.l + iw - 4}" y="${y(start) + 14}" text-anchor="end" style="fill:var(--text-muted);font-size:11px">Start ${esc(gbp0.format(start))}</text>
-        <path d="${path(2)}" fill="none" stroke="${c2}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-        <path d="${path(1)}" fill="none" stroke="${c1}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-        <circle cx="${lx}" cy="${yh}" r="4" fill="${c2}" stroke="${surf}" stroke-width="2"/>
-        <circle cx="${lx}" cy="${yb}" r="4" fill="${c1}" stroke="${surf}" stroke-width="2"/>
-        ${endLabels}
-        <g id="hover" style="display:none">
-          <line id="hx" y1="${m.t}" y2="${m.t + ih}" stroke="var(--text-muted)" stroke-width="1"/>
-          <circle id="h2" r="4" fill="${c2}" stroke="${surf}" stroke-width="2"/>
-          <circle id="h1" r="4" fill="${c1}" stroke="${surf}" stroke-width="2"/>
-        </g>
-        <rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="hit"/>
-      </svg>
-      <div class="tip" id="tip"></div>`;
-
-    const svg = box.querySelector('svg'), hit = box.querySelector('#hit'), hov = box.querySelector('#hover'), tip = box.querySelector('#tip');
-    const move = (ev) => {
-      const r = svg.getBoundingClientRect(), sx = (ev.clientX - r.left) * (W / r.width);
-      const t = t0 + (sx - m.l) / iw * (t1 - t0);
-      let i = 0, best = Infinity;
-      ts.forEach((tt, k) => { const d = Math.abs(tt - t); if (d < best) { best = d; i = k; } });
-      const p = pts[i], px = x(ts[i]);
-      hov.style.display = '';
-      hov.querySelector('#hx').setAttribute('x1', px); hov.querySelector('#hx').setAttribute('x2', px);
-      hov.querySelector('#h1').setAttribute('cx', px); hov.querySelector('#h1').setAttribute('cy', y(p[1]));
-      hov.querySelector('#h2').setAttribute('cx', px); hov.querySelector('#h2').setAttribute('cy', y(p[2]));
-      const diff = p[1] - p[2];
-      tip.innerHTML = `<div class="t">${esc(fmtTime(p[0]))}</div>
-        <div class="row"><span><i class="sw" style="background:${c1}"></i>Bot</span><b>${esc(gbp.format(p[1]))}</b></div>
-        <div class="row"><span><i class="sw" style="background:${c2}"></i>Buy &amp; hold</span><b>${esc(gbp.format(p[2]))}</b></div>
-        <div class="row"><span>Difference</span><b class="${cls(diff)}">${esc(signed(diff))}</b></div>`;
-      tip.style.display = 'block';
-      const bx = px * (r.width / W), tw = tip.offsetWidth;
-      tip.style.left = Math.min(Math.max(0, bx + 12), r.width - tw) + 'px';
-      tip.style.top = '8px';
-      if (bx + 12 + tw > r.width) tip.style.left = Math.max(0, bx - tw - 12) + 'px';
-    };
-    const leave = () => { hov.style.display = 'none'; tip.style.display = 'none'; };
-    hit.addEventListener('pointermove', move);
-    hit.addEventListener('pointerdown', move);
-    hit.addEventListener('pointerleave', leave);
-  }
-
-  // ---------- side-by-side rules test (A / B / C vs buy & hold, all rebased to the same start) ----------
-  const CMP = { A: '--series-1', B: '--series-3', C: '--series-4', D: '--series-5', H: '--series-2' };
-  function drawCompare(box, cmp, start) {
-    const rows = cmp.rows || [];
-    if (rows.length < 2) { box.innerHTML = '<div class="empty">The comparison chart appears after the test’s second round.</div>'; return; }
-    const css = getComputedStyle(document.documentElement), surf = css.getPropertyValue('--surface-1').trim();
-    const ids = cmp.series, col = Object.fromEntries(ids.map(id => [id, css.getPropertyValue(CMP[id] || '--text-muted').trim()]));
-    const label = Object.fromEntries(ids.map(id => [id, id === 'H' ? 'Hold' : id]));
-    const W = Math.max(320, box.clientWidth || 700), H = W < 520 ? 240 : 300;
-    const m = { l: 64, r: W < 520 ? 12 : 64, t: 12, b: 28 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
-    const ts = rows.map(r => toDate(r[0]).getTime());
-    const vals = rows.flatMap(r => r.slice(1)).concat([start]);
-    let lo = Math.min(...vals), hi = Math.max(...vals);
-    const pad = Math.max((hi - lo) * 0.12, start * 0.002); lo -= pad; hi += pad;
-    const step = niceStep(hi - lo, 5); lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
-    const t0 = ts[0], t1 = ts.at(-1) === t0 ? t0 + 1 : ts.at(-1);
-    const x = t => m.l + (t - t0) / (t1 - t0) * iw, y = v => m.t + (1 - (v - lo) / (hi - lo)) * ih;
-    let g = '';
-    for (let v = lo; v <= hi + step / 2; v += step) g += `<line class="gridline" x1="${m.l}" x2="${m.l + iw}" y1="${y(v)}" y2="${y(v)}"/><text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${esc(gbp0.format(v))}</text>`;
-    const nx = W < 520 ? 3 : 5, spanH = (t1 - t0) / 3.6e6;
-    for (let i = 0; i < nx; i++) {
-      const t = t0 + (t1 - t0) * i / (nx - 1);
-      const lab = new Intl.DateTimeFormat('en-GB', spanH > 24 * 8 ? { timeZone: TZ, day: 'numeric', month: 'short' } : spanH > 20 ? { timeZone: TZ, weekday: 'short', hour: '2-digit', minute: '2-digit' } : { timeZone: TZ, hour: '2-digit', minute: '2-digit' }).format(new Date(t));
-      g += `<text x="${x(t)}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === nx - 1 ? 'end' : 'middle'}">${esc(lab)}</text>`;
-    }
-    const paths = ids.map((id, k) => `<path d="${rows.map((r, i) => (i ? 'L' : 'M') + x(ts[i]).toFixed(1) + ' ' + y(r[k + 1]).toFixed(1)).join(' ')}" fill="none" stroke="${col[id]}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`).reverse().join('');
-    // end labels, nudged apart so they never overlap
-    const lx = x(ts.at(-1)), ends = ids.map((id, k) => ({ id, v: rows.at(-1)[k + 1], yy: y(rows.at(-1)[k + 1]) })).sort((a, b) => a.yy - b.yy);
-    for (let i = 1; i < ends.length; i++) if (ends[i].yy - ends[i - 1].yy < 14) ends[i].yy = ends[i - 1].yy + 14;
-    const dots = ends.map(e => `<circle cx="${lx}" cy="${y(e.v)}" r="4" fill="${col[e.id]}" stroke="${surf}" stroke-width="2"/>`).join('');
-    const endLabels = m.r > 40 ? ends.map(e => `<text x="${lx + 10}" y="${e.yy + 4}" style="fill:var(--text-primary);font-size:12px;font-weight:600">${esc(label[e.id])}</text>`).join('') : '';
-    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Side-by-side test: account value of each rule set and buy-and-hold">
-      <g class="axis">${g}</g><line class="refline" x1="${m.l}" x2="${m.l + iw}" y1="${y(start)}" y2="${y(start)}"/>
-      ${paths}${dots}${endLabels}
-      <g class="hov" style="display:none"><line class="hx" y1="${m.t}" y2="${m.t + ih}" stroke="var(--text-muted)" stroke-width="1"/>${ids.map(id => `<circle class="h-${id}" r="4" fill="${col[id]}" stroke="${surf}" stroke-width="2"/>`).join('')}</g>
-      <rect class="hit" x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent"/></svg><div class="tip"></div>`;
-    const svg = box.querySelector('svg'), hov = box.querySelector('.hov'), tip = box.querySelector('.tip'), hit = box.querySelector('.hit');
-    const names = Object.fromEntries(cmp.lines.map(l => [l.id, l.name]));
-    const move = (ev) => {
-      const r = svg.getBoundingClientRect(), sx = (ev.clientX - r.left) * (W / r.width), t = t0 + (sx - m.l) / iw * (t1 - t0);
-      let i = 0, best = Infinity; ts.forEach((tt, k) => { const d = Math.abs(tt - t); if (d < best) { best = d; i = k; } });
-      const px = x(ts[i]); hov.style.display = '';
-      hov.querySelector('.hx').setAttribute('x1', px); hov.querySelector('.hx').setAttribute('x2', px);
-      ids.forEach((id, k) => { const c = hov.querySelector('.h-' + id); c.setAttribute('cx', px); c.setAttribute('cy', y(rows[i][k + 1])); });
-      const order = ids.map((id, k) => [id, rows[i][k + 1]]).sort((a, b) => b[1] - a[1]);
-      tip.innerHTML = `<div class="t">${esc(fmtTime(rows[i][0]))}</div>` + order.map(([id, v]) => `<div class="row"><span><i class="sw" style="background:${col[id]}"></i>${esc(names[id])}</span><b>${esc(gbp.format(v))}</b></div>`).join('');
-      tip.style.display = 'block'; const bx = px * (r.width / W), tw = tip.offsetWidth;
-      tip.style.left = (bx + 12 + tw > r.width ? Math.max(0, bx - tw - 12) : bx + 12) + 'px'; tip.style.top = '8px';
-    };
-    hit.addEventListener('pointermove', move); hit.addEventListener('pointerdown', move);
-    hit.addEventListener('pointerleave', () => { hov.style.display = 'none'; tip.style.display = 'none'; });
-  }
-
-  function newsBlock(n) {
-    if (!n) return '';
-    const v = n.view || {}, moods = ['Very negative', 'Negative', 'Neutral', 'Positive', 'Very positive'];
-    const mood = v.mood != null ? moods[Math.max(0, Math.min(4, Math.round(v.mood)))] : 'no read';
-    const coinViews = Object.entries(v.coins || {}).map(([m, c]) => `${m.replace('-GBP', '')} ${c.view}`).join(', ');
-    return `<div class="sub" style="margin-top:10px"><b style="color:var(--text-primary)">What D saw</b> at ${esc(fmtTime(n.time))}: Fear &amp; Greed ${n.fng ? esc(n.fng.value + ' (' + n.fng.label + ')') : 'unavailable'} · Jev’s read of the news: <b>${esc(mood)}</b> · major bad-event risk ${esc(Math.round((v.risk || 0) * 100) + '%')}${coinViews ? ' · coins in the news: ' + esc(coinViews) : ''}</div>
-      ${(n.headlines || []).length ? `<details><summary>Headlines Jev read (${n.headlines.length})</summary><ul class="rules">${n.headlines.map(h => `<li><span class="dim">${esc(fmtTime(h.time))} · ${esc(h.source)}</span> — ${esc(h.title)}</li>`).join('')}</ul></details>` : ''}`;
-  }
-
-  function compareSection(cmp, news) {
-    if (!cmp) return '';
-    const best = cmp.lines.filter(l => l.id !== 'H').reduce((a, b) => (b.ret > a.ret ? b : a));
-    const legend = cmp.series.map(id => `<span class="key"><i class="swatch" style="background:var(${CMP[id]})"></i>${esc(id === 'H' ? 'Buy & hold' : id)}</span>`).join('');
-    const rowsHtml = cmp.lines.map(l => `<tr><td class="nw"><i style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;background:var(${CMP[l.id]})"></i><b>${esc(l.name)}</b></td>
-      <td class="reason">${esc(l.desc)}</td><td class="num ${cls(l.ret)}">${esc(pct(l.ret))}</td>
-      <td class="num">${l.closed == null ? '—' : num.format(l.closed)}</td>
-      <td class="num">${l.closed ? Math.round(l.wins / l.closed * 100) + '%' : '—'}</td>
-      <td class="dim">${l.open ? esc(l.open.map(m => m.replace('-GBP', '')).join(' ') || 'none') : '—'}</td></tr>`).join('');
-    const days = (Date.now() - toDate(cmp.started)) / 86400000;
-    return `<section class="card section"><div class="head"><h2>Side-by-side rules test</h2><span class="sub">since ${esc(fmtTime(cmp.started))} · every line starts at ${esc(gbp0.format(10000))} · same prices and Jev answers</span>
-        <div class="legend">${legend}</div></div>
-      <div class="body"><div class="chart-box" id="cmpchart"></div>
-        <div class="scroll" style="margin-top:12px"><table><thead><tr><th>Rules</th><th>What they do</th><th class="num">Since test start</th><th class="num">Closed trades</th><th class="num">Won</th><th>Open now</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
-        <div class="sub" style="margin-top:8px">${days < 60 ? `Too early to pick a winner — give it 60 days and 30+ closed trades per line. Ahead right now: ${esc(best.name)}.` : `Ahead: ${esc(best.name)}.`} If C keeps pace with A, Jev isn’t adding much. If D beats A, the news is helping.</div>
-        ${newsBlock(news)}
-      </div></section>`;
-  }
-
-  // ---------- Jev's latest read per market ----------
-  function readCard(market, d, snap) {
-    if (!d) return '';
-    const a = parseAnswers(d.answers);
-    const qs = (snap.rules && snap.rules.questions) || {};
-    const rows = [];
-    for (const [key, ans] of Object.entries(a)) {
-      const q = qs[key] || {};
-      const name = key.charAt(0).toUpperCase() + key.slice(1);
-      if (q.type === 'choice') {
-        rows.push(`<div class="q">${esc(name)}</div><div><span class="chip">${esc(ans.value)}<span class="conf">${ans.conf != null ? Math.round(ans.conf * 100) + '% sure' : ''}</span></span></div>`);
-      } else if (q.type === 'score') {
-        const crit = Array.isArray(q.criteria) ? q.criteria : [];
-        const v = parseFloat(ans.value), n = Math.max(1, crit.length - 1);
-        const lbl = crit[Math.round(v)] || v.toFixed(2);
-        rows.push(`<div class="q">${esc(name)}</div><div><div class="chip">${esc(lbl)}<span class="conf">${v.toFixed(1)} of ${n}</span></div>
-          <div class="mini"><div class="meter-track"><div class="meter-fill" style="width:${Math.max(0, Math.min(100, v / n * 100))}%"></div></div></div></div>`);
-      } else {
-        const v = parseFloat(ans.value);
-        rows.push(`<div class="q">${esc(name)}</div><div class="mini"><div class="meter-track"><div class="meter-fill" style="width:${Math.max(0, Math.min(100, v * 100))}%"></div></div><span>${Math.round(v * 100)}%</span></div>`);
-      }
-    }
-    const act = (d.action || 'NONE').toUpperCase();
-    const badge = act === 'BUY' ? '<span class="badge buy">BUY</span>' : act === 'SELL' ? '<span class="badge sell">SELL</span>' : act === 'HOLD' ? '<span class="badge">HOLD</span>' : '<span class="badge">NO TRADE</span>';
-    return `<div class="card read">
-      <div class="top"><span class="mkt">${esc(market)}</span><span class="px">${esc(px(d.price))}</span></div>
-      <div class="when">Jev's read at ${esc(fmtTime(d.time))}${d.jev_seconds ? ' · answered in ' + (+d.jev_seconds).toFixed(1) + ' s' : ''}</div>
-      <div class="qa">${rows.join('') || '<div class="q">No answers</div><div></div>'}</div>
-      <div class="action">${badge}${esc(d.reason || '')}</div>
-    </div>`;
-  }
-
-  // ---------- Jev's latest read as one table (used when there are many coins) ----------
-  function readsTable(snap) {
-    const qs = (snap.rules && snap.rules.questions) || {};
-    const keys = Object.keys(qs);
-    const held = new Set((snap.positions || []).map(p => p.market));
-    const rows = (snap.markets || []).map(mk => ({ mk, d: (snap.latest || {})[mk] })).filter(r => r.d);
-    rows.sort((a, b) => (held.has(b.mk) - held.has(a.mk)));
-    const cell = (key, ans) => {
-      if (!ans) return '<td class="dim">—</td>';
-      const q = qs[key] || {};
-      if (q.type === 'choice') return `<td class="nw"><b>${esc(ans.value)}</b> <span class="dim">${ans.conf != null ? Math.round(ans.conf * 100) + '%' : ''}</span></td>`;
-      if (q.type === 'score') {
-        const crit = Array.isArray(q.criteria) ? q.criteria : [], v = parseFloat(ans.value);
-        return `<td class="nw">${esc(crit[Math.round(v)] || v.toFixed(1))} <span class="dim">${v.toFixed(1)}</span></td>`;
-      }
-      const v = parseFloat(ans.value);
-      return `<td class="num"><div class="mini" style="min-width:90px"><div class="meter-track"><div class="meter-fill" style="width:${Math.max(0, Math.min(100, v * 100))}%"></div></div><span>${Math.round(v * 100)}%</span></div></td>`;
-    };
-    const badge = (act) => act === 'BUY' ? '<span class="badge buy">BUY</span>' : act === 'SELL' ? '<span class="badge sell">SELL</span>' : act === 'HOLD' ? '<span class="badge">HOLD</span>' : '<span class="dim">no trade</span>';
-    const head = `<thead><tr><th>Coin</th><th class="num">Price</th>${keys.map(k => `<th>${esc(k.charAt(0).toUpperCase() + k.slice(1))}</th>`).join('')}<th>Action</th><th>Checked</th></tr></thead>`;
-    const body = rows.map(({ mk, d }) => {
-      const a = parseAnswers(d.answers);
-      return `<tr><td class="nw"><b>${esc(mk.replace('-GBP', ''))}</b>${held.has(mk) ? ' <span class="badge buy" style="margin-left:4px">OWNED</span>' : ''}</td>
-        <td class="num">${esc(px(d.price))}</td>${keys.map(k => cell(k, a[k])).join('')}
-        <td class="nw">${badge((d.action || '').toUpperCase())}</td><td class="dim nw">${esc(fmtTime(d.time, { day: undefined, month: undefined }))}</td></tr>`;
+    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) g += `<line class="gridline" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${gbp0.format(v)}</text>`;
+    const days = Math.max(1, (t1 - t0) / 86400000), ticks = Math.min(W < 500 ? 3 : 6, Math.ceil(days) + 1);
+    for (let k = 0; k < ticks; k++) { const t = t0 + (t1 - t0) * k / Math.max(1, ticks - 1); g += `<text x="${x(t)}" y="${H - 8}" text-anchor="${k === 0 ? 'start' : k === ticks - 1 ? 'end' : 'middle'}">${new Intl.DateTimeFormat('en-GB', { timeZone: TZ, day: 'numeric', month: 'short' }).format(new Date(t))}</text>`; }
+    const paths = ids.map((id, i) => {
+      const d = rows.map((r, k) => `${k ? 'L' : 'M'}${x(Date.parse(r[0])).toFixed(1)},${y(r[1 + i]).toFixed(1)}`).join('');
+      return `<path d="${d}" fill="none" stroke="${col(id)}" stroke-width="${id === 'A' ? 2.5 : 1.6}" ${id === 'H' || id === 'S' ? 'stroke-dasharray="5 4"' : ''} stroke-linejoin="round"/>`;
     }).join('');
-    const missing = snap.unavailable && snap.unavailable.length ? `<div class="sub" style="margin-top:8px">Skipped (not on Coinbase): ${esc(snap.unavailable.join(', '))}</div>` : '';
-    return `<section class="card section"><div class="head"><h2>Jev's latest read</h2><span class="sub">${rows.length} coins · coins you own first</span></div>
-      <div class="body"><div class="scroll"><table>${head}<tbody>${body || '<tr><td class="dim">No checks yet.</td></tr>'}</tbody></table></div>${missing}</div></section>`;
+    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Value of each paper account over time"><g class="axis">${g}</g>
+      <line class="refline" x1="${L}" x2="${W - R}" y1="${y(s.start_gbp)}" y2="${y(s.start_gbp)}"/>${paths}<line id="hover" stroke="var(--text-muted)" stroke-width="1" y1="${T}" y2="${H - B}" style="display:none"/></svg><div class="tip"></div>`;
+    const svg = box.querySelector('svg'), tip = box.querySelector('.tip'), hl = box.querySelector('#hover');
+    const names = Object.fromEntries([...s.accounts, ...s.bench].map(a => [a.id, a.name]));
+    svg.addEventListener('pointermove', (e) => {
+      const rect = svg.getBoundingClientRect(), px = (e.clientX - rect.left) / rect.width * W;
+      const t = t0 + (px - L) / (W - L - R) * (t1 - t0);
+      let best = rows[0]; for (const r of rows) if (Math.abs(Date.parse(r[0]) - t) < Math.abs(Date.parse(best[0]) - t)) best = r;
+      const bx = x(Date.parse(best[0]));
+      hl.setAttribute('x1', bx); hl.setAttribute('x2', bx); hl.style.display = '';
+      tip.innerHTML = `<div class="t">${fmtTime(best[0])}</div>` + ids.map((id, i) => `<div class="row"><span><span class="sw" style="background:${col(id)}"></span>${esc(names[id] || id)}</span><b>${gbp0.format(best[1 + i])}</b></div>`).join('');
+      tip.style.display = 'block';
+      const left = bx / W * rect.width; tip.style.left = Math.min(Math.max(0, left + 12), rect.width - 230) + 'px'; tip.style.top = '8px';
+    });
+    svg.addEventListener('pointerleave', () => { tip.style.display = 'none'; hl.style.display = 'none'; });
   }
 
-  // ---------- tables ----------
-  function positionsTable(ps) {
-    if (!ps.length) return '<div class="empty" style="padding:16px 0">No open trades right now.</div>';
-    return `<div class="scroll"><table><thead><tr><th>Market</th><th class="num">Bought at</th><th class="num">Now</th><th class="num">Value</th><th class="num">Profit / loss</th><th class="num">Stop</th><th class="num">Target</th><th>Since</th></tr></thead><tbody>
-      ${ps.map(p => `<tr><td class="nw">${esc(p.market)}</td><td class="num">${esc(px(p.entry_price))}</td><td class="num">${esc(px(p.price))}</td>
-        <td class="num">${esc(gbp.format(p.value))}</td><td class="num ${cls(p.pnl)}">${esc(signed(p.pnl))} (${esc(pct(p.pnl_pct))})</td>
-        <td class="num dim">${esc(px(p.stop_price))}</td><td class="num dim">${esc(px(p.target_price))}</td><td class="dim nw">${esc(fmtTime(p.entry_time))}</td></tr>`).join('')}
-      </tbody></table></div>`;
+  function raceBlock(s) {
+    const all = [...s.accounts, ...s.bench];
+    const rowsHtml = all.map(a => `<tr>
+      <td><span class="key"><span class="swatch" style="background:${SERIES[a.id]}"></span><b>${esc(a.name)}</b></span><div class="dim small desc">${esc(a.desc)}</div></td>
+      <td class="num">${gbp.format(a.equity)}</td><td class="num ${cls(a.ret)}">${pct(a.ret)}</td>
+      <td class="num hide-m">${a.closed != null ? `${a.closed}${a.closed ? ` <span class="dim">(${a.wins} won)</span>` : ''}` : '—'}</td>
+      <td class="num hide-m">${a.holdings ? a.holdings.length : '—'}</td></tr>`).join('');
+    const legend = `<details class="show-m"><summary>What each line means</summary><ul class="rules">${all.map(a => `<li><b>${esc(a.name)}</b>: ${esc(a.desc)}</li>`).join('')}</ul></details>`;
+    return `<div class="card section"><div class="head"><h2>The race</h2><span class="sub">Each line started with £10,000 of pretend money${s.started ? ' on ' + fmtTime(s.started, { weekday: undefined, hour: undefined, minute: undefined }) : ''}</span></div>
+      <div class="body"><div class="chart-box" id="chart"></div>
+      <div class="scroll" style="margin-top:12px"><table><thead><tr><th>Account</th><th class="num">Value</th><th class="num">Return</th><th class="num hide-m">Closed trades</th><th class="num hide-m">Holding</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>${legend}</div></div>`;
   }
 
-  function tradesTable(ts) {
-    if (!ts.length) return '<div class="empty" style="padding:16px 0">No trades yet. The bot only buys when every entry rule is met.</div>';
-    const all = ts.slice().reverse();
-    const head = `<thead><tr><th>When</th><th>Market</th><th>Side</th><th class="num">Price</th><th class="num">Amount</th><th class="num">Profit / loss</th><th>Why</th></tr></thead>`;
-    const row = t => { const pnl = t.pnl === '' ? null : +t.pnl; return `<tr><td class="dim nw">${esc(fmtTime(t.time))}</td><td class="nw">${esc(t.market)}</td>
-        <td><span class="badge ${t.side === 'BUY' ? 'buy' : 'sell'}">${esc(t.side)}</span></td>
-        <td class="num">${esc(px(t.fill_price))}</td><td class="num">${esc(gbp.format(+t.gbp))}</td>
-        <td class="num ${pnl == null ? '' : cls(pnl)}">${pnl == null ? '—' : esc(signed(pnl))}</td><td class="reason">${esc(t.reason)}</td></tr>`; };
-    const first = all.slice(0, 10), rest = all.slice(10);
-    return `<div class="scroll"><table>${head}<tbody>${first.map(row).join('')}</tbody></table></div>` +
-      (rest.length ? `<details class="more"><summary>Show ${rest.length} older trades</summary><div class="scroll"><table>${head}<tbody>${rest.map(row).join('')}</tbody></table></div></details>` : '');
+  function holdingsBlock(s) {
+    const tabs = s.accounts.map(a => `<button type="button" class="tab ${state.tab === a.id ? 'on' : ''}" data-tab="${a.id}">${a.id} · ${a.holdings.length}</button>`).join('');
+    const a = s.accounts.find(x => x.id === state.tab) || s.accounts[0];
+    const hold = a.holdings.length ? `<div class="scroll"><table><thead><tr><th>Share</th><th class="num">Bought at</th><th class="num">Now</th><th class="num">Value</th><th class="num">P&amp;L</th><th class="num">Stop</th><th>Bought</th><th>Why</th></tr></thead><tbody>
+      ${a.holdings.map(h => `<tr><td><b>${esc(h.ticker)}</b> <span class="dim">${esc(h.name)}</span></td><td class="num">${usd(h.entry)}</td><td class="num">${usd(h.price)}</td><td class="num">${gbp.format(h.value)}</td>
+        <td class="num ${cls(h.pnl)}">${signed(h.pnl)} (${pct(h.pnl_pct, 1)})</td><td class="num dim">${usd(h.stop)}</td><td class="nw dim">${fmtTime(h.since)}</td><td class="reason">${esc(h.why)}</td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">Nothing held right now.</div>';
+    const tr = a.trades.length ? `<details ${a.trades.length < 6 ? 'open' : ''}><summary>Last ${a.trades.length} trades</summary><div class="scroll"><table><thead><tr><th>When</th><th>Share</th><th></th><th class="num">Price</th><th class="num">£</th><th class="num">P&amp;L</th><th>Why</th></tr></thead><tbody>
+      ${a.trades.map(t => `<tr><td class="nw dim">${fmtTime(t.time)}</td><td><b>${esc(t.ticker)}</b></td><td><span class="badge ${t.side === 'BUY' ? 'buy' : 'sell'}">${t.side}</span></td><td class="num">${usd(t.price)}</td><td class="num">${gbp.format(t.gbp)}</td>
+        <td class="num ${cls(t.pnl)}">${t.pnl != null ? `${signed(t.pnl)} (${pct(t.pnl_pct, 1)})` : ''}</td><td class="reason">${esc(t.why)}</td></tr>`).join('')}</tbody></table></div></details>` : '';
+    return `<div class="card section"><div class="head"><h2>Holdings</h2><div class="tabs">${tabs}</div><span class="sub">Cash ${gbp.format(a.cash)} · fees and costs so far ${gbp.format(a.fees)}</span></div><div class="body">${hold}${tr}</div></div>`;
   }
 
-  function decisionsTable(ds) {
-    if (!ds.length) return '<div class="empty" style="padding:16px 0">No checks yet.</div>';
-    const all = ds.slice().reverse();
-    const head = `<thead><tr><th>When</th><th>Market</th><th class="num">Price</th><th>Jev said</th><th>Action</th><th class="num">Time</th></tr></thead>`;
-    const row = d => `<tr><td class="dim nw">${esc(fmtTime(d.time))}</td><td class="nw">${esc(d.market)}</td><td class="num">${esc(px(d.price))}</td>
-        <td class="reason">${esc(d.answers || d.reason)}</td><td>${esc(d.action)}</td><td class="num dim">${d.jev_seconds ? (+d.jev_seconds).toFixed(1) + ' s' : '—'}</td></tr>`;
-    const first = all.slice(0, 8), rest = all.slice(8);
-    return `<div class="scroll"><table>${head}<tbody>${first.map(row).join('')}</tbody></table></div>` +
-      (rest.length ? `<details class="more"><summary>Show ${rest.length} earlier checks</summary><div class="scroll"><table>${head}<tbody>${rest.map(row).join('')}</tbody></table></div></details>` : '');
+  const meter = (v) => v == null ? '—' : `<span class="mini"><span class="meter-track"><span class="meter-fill" style="display:block;width:${Math.round(v * 100)}%"></span></span><span>${v.toFixed(2)}</span></span>`;
+  function jevCell(e) {
+    if (!e.jev) return `<span class="dim">${esc(e.note || '—')}</span>`;
+    const j = e.jev;
+    const imp = j.impact === 'positive' ? 'pos' : j.impact === 'negative' ? 'neg' : '';
+    return `<div class="jev"><span class="q">Material</span>${meter(j.material)}<span class="q">Impact</span><span class="${imp}"><b>${esc(j.impact)}</b> <span class="dim">${(j.impact_conf ?? 0).toFixed(2)}</span></span><span class="q">Priced in</span>${meter(j.priced_in)}</div>`;
+  }
+  const actionChips = (a) => !a || !Object.keys(a).length ? '<span class="dim">no trades</span>'
+    : Object.entries(a).map(([k, v]) => `<span class="badge ${/BUY/.test(v) ? 'buy' : 'sell'}">${k}: ${esc(v)}</span>`).join(' ');
+  function newsTitle(e) {
+    const link = e.url ? ` <a href="${esc(e.url)}" target="_blank" rel="noopener">filing</a>` : '';
+    const hl = e.headlines ? `<ul class="hl">${e.headlines.map(h => `<li><span class="dim">${esc(h.source)}:</span> ${esc(h.title)}</li>`).join('')}</ul>` : '';
+    return `<b>${esc(e.ticker)}</b> <span class="badge">${e.kind === 'filing' ? 'SEC filing' : 'headlines'}</span><div>${esc(e.title)}${link}</div>${hl}`;
+  }
+  function newsBlock(s) {
+    const wait = s.waiting.length ? `<div class="scroll"><table><thead><tr><th>Published</th><th>News</th><th>Decided from</th></tr></thead><tbody>
+      ${s.waiting.map(e => `<tr><td class="nw dim">${fmtTime(e.time)}</td><td>${newsTitle(e)}</td><td class="nw dim">${e.decide_after ? fmtTime(e.decide_after) : ''}</td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">No news waiting.</div>';
+    const dec = s.decided.length ? `<div class="scroll"><table><thead><tr><th>Decided</th><th>News</th><th>Jev's read</th><th class="num">Share moved</th><th>Trades</th></tr></thead><tbody>
+      ${s.decided.map(e => `<tr><td class="nw dim">${e.decided_at ? fmtTime(e.decided_at) : esc(e.status)}</td><td>${newsTitle(e)}${e.a_why ? `<div class="reason">A: ${esc(e.a_why)}</div>` : ''}</td><td>${jevCell(e)}</td>
+        <td class="num">${e.reaction != null ? `<span class="${cls(e.reaction)}">${pct(e.reaction, 1)}</span><div class="dim small">market ${pct(e.market, 1)}</div>` : '—'}</td><td>${actionChips(e.actions)}</td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">Nothing decided yet. News is decided 30 minutes into US trading, once the price reaction is known.</div>';
+    return `<div class="card section"><div class="head"><h2>Waiting for the market</h2><span class="sub">${s.waiting.length} item${s.waiting.length === 1 ? '' : 's'} · decided 30 min into trading after publication</span></div><div class="body">${wait}</div></div>
+      <div class="card section"><div class="head"><h2>Decided news</h2><span class="sub">Latest ${s.decided.length}</span></div><div class="body">${dec}</div></div>`;
   }
 
-  // ---------- main render ----------
-  function render(snap) {
-    state.snap = snap;
-    setStatus(snap);
-    const s = snap.summary || {};
-    const start = snap.starting_cash || 10000;
-    const eq = s.equity ?? start, ret = s.ret ?? 0, bench = s.bench ?? start, bret = s.bench_ret ?? 0;
-    const edge = ret - bret;
-    const closed = s.closed || 0;
-    const winRate = closed ? Math.round(s.wins / closed * 100) + '% won' : 'none closed yet';
-    const cr = snap.credits;
-    $('#subtitle').textContent = `Fake money only · ${(snap.markets || []).length > 4 ? (snap.markets.length + ' coins') : (snap.markets || []).join(', ')} · checks every ${snap.check_every_minutes || 15} min${(snap.jev_split || 1) > 1 ? ` (each coin every ${(snap.check_every_minutes || 15) * snap.jev_split} min)` : ''} · decisions by Jev via ${snap.provider === 'vercel' ? 'Vercel AI Gateway' : 'TypeSafe'}${snap.runner === 'cloud' ? ' · runs in the cloud' : ''}`;
-
-    const reads = (snap.markets || []).length > 4 ? '' : (snap.markets || []).map(mk => readCard(mk, (snap.latest || {})[mk], snap)).join('');
-    const eqPts = snap.equity || [];
-
-    app.innerHTML = `
-      <section class="hero">
-        <div class="card hero-main">
-          <div class="label">Bot account value</div>
-          <div class="hero-value">${esc(gbp.format(eq))}</div>
-          <div class="delta ${ret > 0 ? 'up' : ret < 0 ? 'down' : 'flat'}">${ret > 0 ? '▲' : ret < 0 ? '▼' : '●'} ${esc(pct(ret))} since start (${esc(gbp0.format(start))})</div>
-        </div>
-        <div class="tiles">
-          <div class="card tile"><div class="label">Buy-and-hold instead</div><div class="value">${esc(gbp.format(bench))}</div><div class="note">${esc(pct(bret))} &middot; bot is <b class="${cls(edge)}">${esc((edge >= 0 ? '+' : '−') + Math.abs(edge).toFixed(2))} pts</b> vs this</div></div>
-          <div class="card tile"><div class="label">Closed trades</div><div class="value">${num.format(closed)}</div><div class="note">${esc(winRate)}${(snap.positions || []).length ? ' &middot; ' + snap.positions.length + ' open' : ''}</div></div>
-          <div class="card tile"><div class="label">Worst drop</div><div class="value">${esc('−' + (s.dd || 0).toFixed(2) + '%')}</div><div class="note">buy-and-hold: −${esc((s.bench_dd || 0).toFixed(2))}%</div></div>
-          <div class="card tile"><div class="label">Fees paid (simulated)</div><div class="value">${esc(gbp.format(snap.fees_paid || 0))}</div><div class="note">${esc(snap.risk ? snap.risk.fee_pct + '% per buy or sell' : '')}</div></div>
-        </div>
-      </section>
-
-      ${s.verdict ? verdictBlock(s) : ''}
-
-      ${compareSection(snap.compare, snap.news)}
-
-      <section class="grid-2">
-        <div class="card">
-          <div class="head"><h2>Account value</h2><span class="sub">bot vs simply buying and holding</span>
-            <div class="legend"><span class="key"><i class="swatch" style="background:var(--series-1)"></i>Bot</span><span class="key"><i class="swatch" style="background:var(--series-2)"></i>Buy &amp; hold</span></div></div>
-          <div class="body"><div class="chart-box" id="chart"></div>
-            ${eqPts.length ? `<details><summary>Show as table</summary><div class="scroll"><table><thead><tr><th>When</th><th class="num">Bot</th><th class="num">Buy &amp; hold</th></tr></thead><tbody>
-              ${eqPts.slice().reverse().slice(0, 48).map(p => `<tr><td class="dim">${esc(fmtTime(p[0]))}</td><td class="num">${esc(gbp.format(p[1]))}</td><td class="num">${esc(gbp.format(p[2]))}</td></tr>`).join('')}
-            </tbody></table></div></details>` : ''}
-          </div>
-        </div>
-        <div class="stack">
-          <div class="card"><div class="head"><h2>Jev &amp; Vercel</h2></div><div class="body"><dl class="kv">
-            <dt>Jev checks</dt><dd>${num.format(s.checks || 0)}</dd>
-            <dt>Errors</dt><dd>${num.format(s.errors || 0)}</dd>
-            ${s.skips != null ? `<dt>Skipped (Jev busy)</dt><dd>${num.format(s.skips)}</dd>` : ''}
-            ${s.retries != null ? `<dt>Retries (Jev busy)</dt><dd>${num.format(s.retries)}</dd>` : ''}
-            <dt>Average answer time</dt><dd>${((s.avg_secs || 0)).toFixed(2)} s</dd>
-            <dt>Tokens used</dt><dd>${num.format(s.tokens || 0)}</dd>
-            <dt>Jev cost logged</dt><dd>${esc(usd(s.cost || 0, 4))}</dd>
-            ${cr ? `<dt>AI Gateway credit left</dt><dd>${esc(usd(cr.balance))}</dd><dt>AI Gateway used to date</dt><dd>${esc(usd(cr.total_used))}</dd>` : '<dt>AI Gateway balance</dt><dd class="dim">not reported</dd>'}
-          </dl></div></div>
-          <div class="card"><div class="head"><h2>Cash</h2></div><div class="body"><dl class="kv">
-            <dt>Cash</dt><dd>${esc(gbp.format(snap.cash ?? 0))}</dd>
-            <dt>In open trades</dt><dd>${esc(gbp.format(Math.max(0, Math.round(((eq) - (snap.cash ?? 0)) * 100) / 100)))}</dd>
-          </dl></div></div>
-        </div>
-      </section>
-
-      ${(snap.markets || []).length > 4 ? readsTable(snap) : `<h2 style="font-size:14px;margin:4px 0 10px">Jev's latest read</h2>
-      <section class="reads">${reads || '<div class="card read"><div class="empty">No checks yet.</div></div>'}</section>`}
-
-      <section class="card section"><div class="head"><h2>Open trades</h2></div><div class="body">${positionsTable(snap.positions || [])}</div></section>
-      <section class="card section"><div class="head"><h2>Trade history</h2><span class="sub">latest first</span></div><div class="body">${tradesTable(snap.trades || [])}</div></section>
-
-      <section class="grid-2">
-        <div class="card"><div class="head"><h2>Recent checks</h2><span class="sub">every answer Jev gave, latest first</span></div><div class="body">${decisionsTable(snap.decisions || [])}</div></div>
-        <div class="stack">
-          <div class="card"><div class="head"><h2>Your rules</h2></div><div class="body">
-            <div class="rules-h">Buy when all are true</div><ul class="rules">${(snap.rules?.entry || []).map(r => `<li>${esc(r)}</li>`).join('')}</ul>
-            <div class="rules-h">Sell when any is true</div><ul class="rules">${(snap.rules?.exit || []).map(r => `<li>${esc(r)}</li>`).join('')}
-              ${snap.risk ? `<li>price falls ${snap.risk.stop_loss_pct}% (stop-loss)</li><li>price rises ${snap.risk.take_profit_pct}% (take-profit)</li>` : ''}</ul>
-            ${snap.risk ? `<div class="rules-h">Safety limits</div><ul class="rules">
-              <li>${snap.risk.position_size_pct}% of the account per trade</li>
-              <li>no new trades after a ${snap.risk.daily_loss_limit_pct}% loss in a day</li>
-              <li>${snap.risk.cooldown_minutes} min wait before re-buying a market</li>
-              <li>simulated slippage ${snap.risk.slippage_pct}% on ${esc((snap.risk.major_markets || []).map(m => m.replace('-GBP', '')).join(' & ') || 'all coins')}${snap.risk.slippage_pct_other != null && (snap.risk.major_markets || []).length ? `, ${snap.risk.slippage_pct_other}% on the rest` : ''}</li></ul>` : ''}
-          </div></div>
-          ${(snap.events || []).length ? `<div class="card"><div class="head"><h2>Warnings</h2></div><div class="body"><ul class="events" style="list-style:none;padding:0;margin:0">
-            ${snap.events.slice().reverse().slice(0, 8).map(e => `<li>${e.level === 'ERROR' ? icon.bad : icon.warn}<span class="lvl" style="color:${e.level === 'ERROR' ? 'var(--critical-text)' : 'var(--serious)'}">${esc(e.level === 'SKIP' ? 'Skipped' : e.level === 'ERROR' ? 'Error' : 'Warning')}</span>${esc(fmtTime(e.time))} &middot; ${esc(e.message)}</li>`).join('').replace(/class="icon"/g, 'class="icon" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"')}
-          </ul></div></div>` : ''}
-        </div>
-      </section>`;
-
-    drawChart($('#chart'), eqPts, start);
-    if (snap.compare) drawCompare($('#cmpchart'), snap.compare, start);
+  function aboutBlock(s) {
+    const r = s.rules, st = s.stats;
+    const q = Object.entries(r.questions).map(([k, v]) => `<li><b>${esc(k)}</b> (${esc(v.type === 'noul' ? 'yes/no probability' : v.type)}): ${esc(v.instructions)}</li>`).join('');
+    const cost = st.costed ? `$${st.cost.toFixed(4)} over ${st.jev_calls} reads` : `${st.jev_calls} reads`;
+    const log = s.log.filter(l => l.level !== 'TRADE').slice(0, 25);
+    return `<div class="grid-2">
+      <div class="card"><div class="head"><h2>How the test works</h2></div><div class="body">
+        <div class="rules-h">What Jev is asked about each piece of news</div><ul class="rules">${q}</ul>
+        <div class="rules-h">A buys when</div><ul class="rules"><li>material at least ${r.a.buy.material_at_least}, impact '${r.a.buy.impact}' with confidence at least ${r.a.buy.impact_confidence}, and priced in below ${r.a.buy.priced_in_below}</li></ul>
+        <div class="rules-h">A sells a holding when</div><ul class="rules"><li>material at least ${r.a.sell.material_at_least} and impact '${r.a.sell.impact}' with confidence at least ${r.a.sell.impact_confidence}</li></ul>
+        <div class="rules-h">Same for every account</div><ul class="rules">
+          <li>${r.risk.position_size_pct}% of the account per share, at most ${r.risk.max_positions} holdings and ${r.risk.max_buys_per_day} purchases a day</li>
+          <li>Stop-loss ${r.risk.stop_loss_pct}% below the buying price; once ${r.risk.trail_after_gain_pct}% up, the stop follows ${r.risk.stop_loss_pct}% below the highest price</li>
+          <li>Sold after ${r.risk.max_hold_days} days at most</li>
+          <li>Costs (assumed): ${r.risk.fx_fee_pct}% currency conversion each way plus ${r.risk.slippage_pct}% price slippage. No stamp duty on US shares.</li></ul>
+        <div class="rules-h">Shares watched</div><p class="small dim">${r.universe.map(u => esc(u.ticker)).join(', ')}</p>
+        <div class="rules-h">Sources</div><p class="small dim">Company filings from the SEC (EDGAR), headlines from Nasdaq and Seeking Alpha, prices from Yahoo Finance (5-minute bars).</p>
+      </div></div>
+      <div class="stack">
+        <div class="card"><div class="head"><h2>Jev usage</h2></div><div class="body"><dl class="kv">
+          <dt>News reads</dt><dd>${st.jev_calls}</dd><dt>Average answer time</dt><dd>${st.avg_secs}s</dd><dt>Cost so far</dt><dd>${esc(cost)}</dd>
+          <dt>Busy, retried later</dt><dd>${st.jev_busy}</dd><dt>Errors</dt><dd>${st.jev_errors}</dd>
+          <dt>SEC filings found</dt><dd>${st.filings}</dd><dt>Headline batches</dt><dd>${st.headline_events}</dd>
+          ${s.credits ? `<dt>AI Gateway credit left</dt><dd>$${s.credits.balance.toFixed(2)}</dd>` : ''}
+          <dt>£1 =</dt><dd>$${(s.fx || 0).toFixed(4)}</dd></dl></div></div>
+        <div class="card"><div class="head"><h2>Recent notes</h2></div><div class="body">${log.length ? `<ul class="events">${log.map(l => `<li><span class="lvl">${esc(l.level)}</span>${esc(fmtTime(l.time))} · ${esc(l.message)}</li>`).join('')}</ul>` : '<div class="dim small">Nothing to report.</div>'}</div></div>
+      </div></div>`;
   }
 
-  function notice(title, text) {
-    app.innerHTML = `<div class="card notice"><h2>${esc(title)}</h2><div class="sub">${esc(text)}</div></div>`;
+  function render(s) {
+    if (!s || s.empty) { app.innerHTML = `<div class="card notice"><h2>Starting up</h2><p class="sub">The stock bot hasn't finished its first round yet. This page will fill in by itself.</p></div>`; return; }
+    app.innerHTML = verdictBlock(s) + raceBlock(s) + holdingsBlock(s) + newsBlock(s) + aboutBlock(s);
+    drawChart($('#chart'), s);
+    app.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { state.tab = b.dataset.tab; render(s); }));
   }
 
   async function load() {
     try {
       const r = await fetch('/api/data', { cache: 'no-store' });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) { setStatus(null); notice('Dashboard not ready', d.error || 'The data store is not reachable yet.'); return; }
-      if (d.empty) { setStatus(null); notice('Waiting for the bot', 'No data has arrived yet. It appears after the bot’s next check (every 15 minutes).'); return; }
-      render(d);
+      const s = await r.json();
+      state.snap = s; setStatus(s); render(s);
     } catch (e) {
-      if (!state.snap) notice('Could not load', 'Check your connection and refresh.');
+      if (!state.snap) app.innerHTML = `<div class="card notice"><h2>Couldn't load the data</h2><p class="sub">${esc(e.message)}</p></div>`;
     }
   }
-
-  let resizeT;
-  window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (!state.snap) return; drawChart($('#chart'), state.snap.equity || [], state.snap.starting_cash || 10000); if (state.snap.compare) drawCompare($('#cmpchart'), state.snap.compare, state.snap.starting_cash || 10000); }, 150); });
-  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => state.snap && render(state.snap));
-  setInterval(load, 60000);
-  setInterval(() => state.snap && setStatus(state.snap), 20000);
   load();
+  setInterval(load, 60000);
+  let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => state.snap && !state.snap.empty && drawChart($('#chart'), state.snap), 150); });
+  setInterval(() => state.snap && setStatus(state.snap), 20000);
 })();
 </script>
 </body>
