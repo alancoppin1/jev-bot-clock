@@ -361,12 +361,23 @@ ul.hl li { margin: 2px 0; }
     const rowsHtml = all.map(a => `<tr>
       <td><span class="key"><span class="swatch" style="background:${SERIES[a.id]}"></span><b>${esc(a.name)}</b></span><div class="dim small desc">${esc(a.desc)}</div></td>
       <td class="num">${gbp.format(a.equity)}</td><td class="num ${cls(a.ret)}">${pct(a.ret)}</td>
-      <td class="num hide-m">${a.closed != null ? `${a.closed}${a.closed ? ` <span class="dim">(${a.wins} won)</span>` : ''}` : '—'}</td>
+      <td class="num">${a.closed != null ? `${a.closed}${a.closed ? ` <span class="dim">(${a.wins} won)</span>` : ''}` : '—'}</td>
       <td class="num hide-m">${a.holdings ? a.holdings.length : '—'}</td></tr>`).join('');
     const legend = `<details class="show-m"><summary>What each line means</summary><ul class="rules">${all.map(a => `<li><b>${esc(a.name)}</b>: ${esc(a.desc)}</li>`).join('')}</ul></details>`;
     return `<div class="card section"><div class="head"><h2>The race</h2><span class="sub">Each line started with £10,000 of pretend money${s.started ? ' on ' + fmtTime(s.started, { weekday: undefined, hour: undefined, minute: undefined }) : ''}</span></div>
       <div class="body"><div class="chart-box" id="chart"></div>
-      <div class="scroll" style="margin-top:12px"><table><thead><tr><th>Account</th><th class="num">Value</th><th class="num">Return</th><th class="num hide-m">Closed trades</th><th class="num hide-m">Holding</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>${legend}</div></div>`;
+      <div class="scroll" style="margin-top:12px"><table><thead><tr><th>Account</th><th class="num">Value</th><th class="num">Return</th><th class="num">Closed</th><th class="num hide-m">Holding</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>${legend}</div></div>`;
+  }
+
+  function closedBlock(s) {
+    const sells = s.accounts.flatMap(a => a.trades.filter(t => t.side === 'SELL').map(t => ({ ...t, acct: a.id })))
+      .sort((x, y) => y.time.localeCompare(x.time));
+    const totals = s.accounts.map(a => `${a.id}: ${a.closed ? `<b class="${cls(a.realised)}">${signed(a.realised)}</b> from ${a.closed}` : 'none yet'}`).join(' · ');
+    const body = sells.length ? `<div class="scroll"><table><thead><tr><th>Share</th><th class="num">Profit / loss</th><th>Sold</th><th class="num hide-m">Sold at</th><th class="num hide-m">Held</th><th class="hide-m">Why sold</th></tr></thead><tbody>
+      ${sells.map(t => `<tr><td class="nw"><span class="dim">${t.acct} ·</span> <b>${esc(t.ticker)}</b></td><td class="num nw ${cls(t.pnl)}"><b>${signed(t.pnl)}</b> (${pct(t.pnl_pct, 1)})</td><td class="nw dim">${fmtTime(t.time)}</td>
+        <td class="num hide-m">${usd(t.price)}</td><td class="num dim hide-m">${t.held_days != null ? Math.round(t.held_days) + 'd' : ''}</td><td class="reason hide-m">${esc(t.why)}</td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">No trades closed yet.</div>';
+    return `<div class="card section"><div class="head"><h2>Closed trades</h2><span class="sub">Realised profit / loss · ${totals}</span></div><div class="body">${body}</div></div>`;
   }
 
   function holdingsBlock(s) {
@@ -439,7 +450,7 @@ ul.hl li { margin: 2px 0; }
 
   function render(s) {
     if (!s || s.empty) { app.innerHTML = `<div class="card notice"><h2>Starting up</h2><p class="sub">The stock bot hasn't finished its first round yet. This page will fill in by itself.</p></div>`; return; }
-    app.innerHTML = verdictBlock(s) + raceBlock(s) + holdingsBlock(s) + newsBlock(s) + aboutBlock(s);
+    app.innerHTML = verdictBlock(s) + raceBlock(s) + closedBlock(s) + holdingsBlock(s) + newsBlock(s) + aboutBlock(s);
     drawChart($('#chart'), s);
     app.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { state.tab = b.dataset.tab; render(s); }));
   }
