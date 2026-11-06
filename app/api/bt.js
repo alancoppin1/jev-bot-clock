@@ -190,6 +190,12 @@ export default async function handler(req, res) {
       for (const id of ids) { await redisCmd(['DEL', 'bt:c:' + id, 'bt:a:' + id]); await redisCmd(['SREM', 'bt:done', id]); }
       return res.status(200).json({ reset: ids });
     }
+    if (q.op === 'events') {   // read-only: every news event the live stock bot has decided, for analysis
+      const raw = await redisCmd(['GET', 'jev:state.json']); const st = raw ? JSON.parse(raw) : {};
+      const ev = (st.done || []).filter(e => e.status === 'decided').map(e => ({ id: e.id, ticker: e.ticker, kind: e.kind, time: e.time, decided_at: e.decided_at,
+        jev: e.jev || null, price: e.price_at_decision, before: e.price_before, reaction: e.reaction, market: e.market, actions: e.actions || null }));
+      return res.status(200).json({ n: ev.length, events: ev });
+    }
     if (q.op === 'assets') return res.status(200).json(ASSETS);
     return res.status(400).json({ error: 'op must be probe, step, status, dump or assets' });
   } catch (e) {
